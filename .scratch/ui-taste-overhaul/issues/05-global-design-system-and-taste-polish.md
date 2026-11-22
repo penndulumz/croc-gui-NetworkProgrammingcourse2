@@ -4,8 +4,8 @@
 
 **Blocked by:** 04: Calm Primary Telemetry & Expandable Stream Inspector
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Entire application adheres to a cohesive, high-taste dark/light design system with refined borders and typography
-- [ ] Cluttered alert boxes and redundant badges are removed or replaced with subtle inline hints
-- [ ] `npm run lint`, `npm test`, and `npm run build` all pass with zero errors
+- [x] Entire application adheres to a cohesive, high-taste dark/light design system with refined borders and typography
+- [x] Cluttered alert boxes and redundant badges are removed or replaced with subtle inline hints
+- [x] `npm run lint`, `npm test`, and `npm run build` all pass with zero errors

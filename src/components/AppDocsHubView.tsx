@@ -299,10 +299,10 @@ export function AppDocsHubView({
       {/* Page Title & Top Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
             {t.docs.title}
           </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {t.docs.subtitle}
           </p>
         </div>
@@ -310,9 +310,9 @@ export function AppDocsHubView({
           <button
             type="button"
             onClick={handleExportTechnicalReport}
-            className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-teal-500/30 bg-teal-50 px-4 py-2 text-xs font-semibold text-teal-800 shadow-xs hover:bg-teal-100 dark:border-teal-400/30 dark:bg-teal-950/60 dark:text-teal-200 dark:hover:bg-teal-900/60 transition-all"
+            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
           >
-            <FileDown className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+            <FileDown className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-600" aria-hidden="true" />
             <span>{t.docs.exportReportBtn}</span>
           </button>
         </div>
@@ -321,14 +321,14 @@ export function AppDocsHubView({
       {/* CROSS-PLATFORM DOWNLOADS & INSTALLATION CARDS */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {/* PWA Card */}
-        <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                   <BookOpen className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   {t.docs.pwaTitle}
                 </h2>
               </div>
@@ -336,45 +336,45 @@ export function AppDocsHubView({
                 PWA
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? "Chạy toàn màn hình không thanh URL, tự động lưu đệm ngoại tuyến (Service Worker), tương thích 100% Chrome, Edge, Safari và Firefox."
                 : "Full-screen standalone app without browser chrome, offline caching via Workbox Service Workers, compatible with Chrome, Edge, and Safari."}
             </p>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
             <PWAInstallButton />
           </div>
         </div>
 
         {/* Android APK Card */}
-        <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                   <Smartphone className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   {t.docs.androidTitle}
                 </h2>
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 Capacitor
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? "Đóng gói Android gốc qua Capacitor (app.crocflow.mobile), tự động build file APK qua GitHub Actions mà không cần cài Android Studio."
                 : "Native Android packaging via Capacitor (app.crocflow.mobile), with automated cloud APK builds via GitHub Actions."}
             </p>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
             <a
               href="docs/SETUP_AND_DEPLOY_EN.md"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               <span>{locale === "vi" ? "Xem hướng dẫn build APK" : "View APK Build Guide"}</span>
@@ -383,33 +383,33 @@ export function AppDocsHubView({
         </div>
 
         {/* Desktop Card */}
-        <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400">
+                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                   <Laptop className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   {t.docs.desktopTitle}
                 </h2>
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-mono text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 Electron
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? "Tích hợp sẵn Bridge Server Node.js cục bộ chạy ngầm, hỗ trợ xuất tệp Windows (.exe), macOS (.dmg) và Linux (.AppImage)."
                 : "Embeds background loopback Node.js bridge server, packaged for Windows (.exe), macOS (.dmg), and Linux (.AppImage)."}
             </p>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
             <a
               href="packaging/desktop/"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               <span>{locale === "vi" ? "Mã nguồn Desktop packaging" : "Desktop Packaging Files"}</span>
@@ -419,24 +419,24 @@ export function AppDocsHubView({
       </section>
 
       {/* INTERACTIVE DEMO RUNNERS SECTION */}
-      <section className="rounded-2xl border border-teal-200/80 bg-white p-6 shadow-sm dark:border-teal-900/50 dark:bg-[#111827]">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
         {/* Lab Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-4 dark:border-slate-800/80">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 pb-4 dark:border-zinc-800/80">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
               <FlaskConical className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">
+                <h2 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   {t.docs.interactiveDemoTitle}
                 </h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200 border border-teal-200/60 dark:border-teal-800/60">
-                  <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-800/60">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                   Live WebSocket
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {locale === "vi"
                   ? "Thực nghiệm tương tác qua WebSocket thật (/ws-dual): chia tải 2 kênh Relay, mô phỏng ngắt kết nối (Failover) và cơ chế Resume Cache từ IndexedDB."
                   : "Interactive verification over real WebSockets (/ws-dual): 2-channel load balancing, live failover injection, and IndexedDB delta resume."}
@@ -448,19 +448,19 @@ export function AppDocsHubView({
         {/* Two Interactive Demo Cards */}
         <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
           {/* DEMO 1: DUAL-RELAY & LIVE FAILOVER */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-950/60">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600 text-white shadow-xs">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs">
                   <Zap className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     {locale === "vi"
                       ? "Demo 1: Dual-Relay Multi-Path & Tự Động Failover"
                       : "Demo 1: Concurrent Dual-Relay & Live Failover"}
                   </h3>
-                  <span className="text-[11px] font-medium text-teal-700 dark:text-teal-400">
+                  <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                     {locale === "vi"
                       ? "Multi-path TCP Analog · Phân bổ Chẵn/Lẻ · Tái định tuyến"
                       : "Even/Odd Chunk Partitioning · Socket Severance · Seamless Rerouting"}
@@ -468,8 +468,8 @@ export function AppDocsHubView({
                 </div>
               </div>
 
-              <div className="mt-3.5 space-y-2 rounded-xl bg-white p-3.5 text-xs leading-relaxed text-slate-600 border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400">
-                <p className="font-semibold text-slate-800 dark:text-slate-200">
+              <div className="mt-3.5 space-y-2 rounded-xl bg-white p-3.5 text-xs leading-relaxed text-zinc-600 border border-zinc-200/80 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400">
+                <p className="font-semibold text-zinc-800 dark:text-zinc-200">
                   {locale === "vi" ? "Trình tự thực nghiệm:" : "Verification Sequence:"}
                 </p>
                 <ol className="list-decimal space-y-1 pl-4 text-[11px]">
@@ -498,10 +498,10 @@ export function AppDocsHubView({
 
               {/* Live Status when Demo 1 is running */}
               {runningDemo === "demo1" && (
-                <div className="mt-3.5 space-y-2.5 rounded-xl border border-teal-300 bg-teal-50/80 p-3 text-xs dark:border-teal-800 dark:bg-teal-950/50">
-                  <div className="flex items-center justify-between font-medium text-teal-900 dark:text-teal-200">
+                <div className="mt-3.5 space-y-2.5 rounded-xl border border-zinc-200 bg-white/80 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <div className="flex items-center justify-between font-medium text-zinc-900 dark:text-zinc-100">
                     <div className="flex items-center gap-2 truncate">
-                      <span className="h-2 w-2 rounded-full bg-teal-600 animate-pulse" aria-hidden="true" />
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                       <span className="truncate">{statusText}</span>
                     </div>
                     {progressPercent > 0 && (
@@ -510,9 +510,9 @@ export function AppDocsHubView({
                   </div>
 
                   {progressPercent > 0 && (
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                       <div
-                        className="h-full rounded-full bg-teal-600 transition-all duration-150 dark:bg-teal-400"
+                        className="h-full rounded-full bg-zinc-900 transition-all duration-150 dark:bg-zinc-100"
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
@@ -520,21 +520,21 @@ export function AppDocsHubView({
 
                   {/* Metrics & Chunk Counts */}
                   <div className="grid grid-cols-2 gap-2 font-mono text-[11px] sm:grid-cols-4">
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">{t.common.speed}</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatSpeed(metrics.speedBps)}</span>
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">{t.common.speed}</span>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{formatSpeed(metrics.speedBps)}</span>
                     </div>
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">{t.common.eta}</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatEta(metrics.etaSeconds, metrics.isStalled)}</span>
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">{t.common.eta}</span>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{formatEta(metrics.etaSeconds, metrics.isStalled)}</span>
                     </div>
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">Alpha (Even)</span>
-                      <span className="font-bold text-teal-700 dark:text-teal-300">{progress?.alphaChunks ?? 0}</span>
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">Alpha (Even)</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{progress?.alphaChunks ?? 0}</span>
                     </div>
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">Beta (Odd/Failover)</span>
-                      <span className="font-bold text-indigo-700 dark:text-indigo-300">
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">Beta (Odd/Failover)</span>
+                      <span className="font-bold text-sky-600 dark:text-sky-400">
                         {progress?.betaChunks ?? 0}
                         {progress && progress.failoverChunks > 0 && ` (${progress.failoverChunks} failover)`}
                       </span>
@@ -545,14 +545,14 @@ export function AppDocsHubView({
 
               {/* Demo 1 Result Box */}
               {demo1Result && !runningDemo && (
-                <div className="mt-3.5 rounded-xl border border-teal-300 bg-teal-50/90 p-3.5 text-xs text-teal-950 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
+                <div className="mt-3.5 rounded-xl border border-zinc-200 bg-zinc-50/90 p-3.5 text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100">
                   <div className="flex items-center gap-2 font-bold">
                     <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                     <span>
                       {locale === "vi" ? "Kết quả Demo 1 thành công:" : "Demo 1 Result Summary:"}
                     </span>
                   </div>
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[11px]">
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[11px] text-zinc-600 dark:text-zinc-400">
                     <li>
                       {locale === "vi"
                         ? `Relay Alpha đã chuyển ${demo1Result.alphaDelivered} chunk chẵn trước khi ngắt.`
@@ -574,13 +574,13 @@ export function AppDocsHubView({
             </div>
 
             {/* Demo 1 Buttons */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+            <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-200/80 dark:border-zinc-800">
               {runningDemo !== "demo1" ? (
                 <button
                   type="button"
                   disabled={runningDemo !== null}
                   onClick={() => void handleRunDualRelayDemo()}
-                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 disabled:opacity-50"
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white disabled:opacity-50 transition-all"
                 >
                   <Play className="h-3.5 w-3.5" aria-hidden="true" />
                   {t.docs.runFailoverDemoBtn}
@@ -591,7 +591,7 @@ export function AppDocsHubView({
                     <button
                       type="button"
                       onClick={handleSimulateAlphaDisconnect}
-                      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-400 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-200"
+                      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-50/60 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200 transition-colors"
                     >
                       <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
                       {t.docs.severAlphaBtn}
@@ -600,7 +600,7 @@ export function AppDocsHubView({
                   <button
                     type="button"
                     onClick={handleCancelDemo}
-                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200 transition-colors"
                   >
                     <Square className="h-3.5 w-3.5" aria-hidden="true" />
                     {locale === "vi" ? "Dừng Demo" : "Stop"}
@@ -611,19 +611,19 @@ export function AppDocsHubView({
           </div>
 
           {/* DEMO 2: FOLDER MANIFEST & RESUME CACHE */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-5 dark:border-zinc-800 dark:bg-zinc-950/60">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs">
                   <Database className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     {locale === "vi"
                       ? "Demo 2: Folder Manifest & Resume khi Thêm Tệp Mới"
                       : "Demo 2: Folder Manifest & Delta Resume"}
                   </h3>
-                  <span className="text-[11px] font-medium text-indigo-700 dark:text-indigo-400">
+                  <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                     {locale === "vi"
                       ? "IndexedDB Resume Cache · Bỏ qua Chunk cũ · Tải tệp mới"
                       : "IndexedDB Chunk Cache · Skip Verified Chunks · Delta Detection"}
@@ -631,8 +631,8 @@ export function AppDocsHubView({
                 </div>
               </div>
 
-              <div className="mt-3.5 space-y-2 rounded-xl bg-white p-3.5 text-xs leading-relaxed text-slate-600 border border-slate-200/80 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400">
-                <p className="font-semibold text-slate-800 dark:text-slate-200">
+              <div className="mt-3.5 space-y-2 rounded-xl bg-white p-3.5 text-xs leading-relaxed text-zinc-600 border border-zinc-200/80 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400">
+                <p className="font-semibold text-zinc-800 dark:text-zinc-200">
                   {locale === "vi" ? "Quy trình mô phỏng 2 giai đoạn:" : "2-Stage Verification Sequence:"}
                 </p>
                 <ol className="list-decimal space-y-1 pl-4 text-[11px]">
@@ -661,10 +661,10 @@ export function AppDocsHubView({
 
               {/* Live Status when Demo 2 is running */}
               {runningDemo === "demo2" && (
-                <div className="mt-3.5 space-y-2.5 rounded-xl border border-indigo-300 bg-indigo-50/80 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/50">
-                  <div className="flex items-center justify-between font-medium text-indigo-900 dark:text-indigo-200">
+                <div className="mt-3.5 space-y-2.5 rounded-xl border border-zinc-200 bg-white/80 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <div className="flex items-center justify-between font-medium text-zinc-900 dark:text-zinc-100">
                     <div className="flex items-center gap-2 truncate">
-                      <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" aria-hidden="true" />
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                       <span className="truncate">{statusText}</span>
                     </div>
                     {progressPercent > 0 && (
@@ -673,9 +673,9 @@ export function AppDocsHubView({
                   </div>
 
                   {progressPercent > 0 && (
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                       <div
-                        className="h-full rounded-full bg-indigo-600 transition-all duration-150 dark:bg-indigo-400"
+                        className="h-full rounded-full bg-zinc-900 transition-all duration-150 dark:bg-zinc-100"
                         style={{ width: `${progressPercent}%` }}
                       />
                     </div>
@@ -683,23 +683,23 @@ export function AppDocsHubView({
 
                   {/* Metrics */}
                   <div className="grid grid-cols-2 gap-2 font-mono text-[11px] sm:grid-cols-3">
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">{t.common.speed}</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatSpeed(metrics.speedBps)}</span>
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">{t.common.speed}</span>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{formatSpeed(metrics.speedBps)}</span>
                     </div>
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">
                         {locale === "vi" ? "Tiến độ Chunks" : "Chunk Progress"}
                       </span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">
                         {progress?.completedChunks ?? 0} / {progress?.totalChunks ?? 0}
                       </span>
                     </div>
-                    <div className="rounded-lg bg-white/80 p-1.5 dark:bg-slate-900/80">
-                      <span className="block text-[10px] text-slate-500 font-sans">
+                    <div className="rounded-lg bg-zinc-50 p-1.5 dark:bg-zinc-950/60">
+                      <span className="block text-[10px] text-zinc-500 font-sans">
                         {locale === "vi" ? "Bỏ qua Resume" : "Cached Chunks"}
                       </span>
-                      <span className="font-bold text-indigo-700 dark:text-indigo-300">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         {progress?.resumedChunks ?? 0} chunks
                       </span>
                     </div>
@@ -709,12 +709,12 @@ export function AppDocsHubView({
 
               {/* Demo 2 Result Box */}
               {demo2Result && !runningDemo && (
-                <div className="mt-3.5 rounded-xl border border-indigo-300 bg-indigo-50/90 p-3.5 text-xs text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
+                <div className="mt-3.5 rounded-xl border border-zinc-200 bg-zinc-50/90 p-3.5 text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100">
                   <div className="flex items-center gap-2 font-bold">
-                    <Check className="h-4 w-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
+                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                     <span>{locale === "vi" ? "Kết quả Demo 2 thành công:" : "Demo 2 Result Summary:"}</span>
                   </div>
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[11px]">
+                  <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[11px] text-zinc-600 dark:text-zinc-400">
                     <li>
                       {locale === "vi"
                         ? `Giai đoạn 1 lưu đệm: ${demo2Result.stage1CachedChunks} chunks trong IndexedDB.`
@@ -741,13 +741,13 @@ export function AppDocsHubView({
             </div>
 
             {/* Demo 2 Buttons */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+            <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-zinc-200/80 dark:border-zinc-800">
               {runningDemo !== "demo2" ? (
                 <button
                   type="button"
                   disabled={runningDemo !== null}
                   onClick={() => void handleRunResumeDemo()}
-                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white disabled:opacity-50 transition-all"
                 >
                   <Play className="h-3.5 w-3.5" aria-hidden="true" />
                   {t.docs.runResumeDemoBtn}
@@ -756,7 +756,7 @@ export function AppDocsHubView({
                 <button
                   type="button"
                   onClick={handleCancelDemo}
-                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
+                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200 transition-colors"
                 >
                   <Square className="h-3.5 w-3.5" aria-hidden="true" />
                   {locale === "vi" ? "Dừng Demo" : "Stop"}
@@ -792,8 +792,8 @@ export function AppDocsHubView({
       </section>
 
       {/* BILINGUAL TECHNICAL DOCUMENTATION VIEWER TABS */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-[#111827] shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800/80">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white dark:border-zinc-800/80 dark:bg-zinc-900/60 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800/80">
           {[
             { id: "networking" as const, label: t.docs.tabNetworking, icon: BookOpen },
             { id: "architecture" as const, label: t.docs.tabArchitecture, icon: Laptop },
@@ -808,8 +808,8 @@ export function AppDocsHubView({
                 onClick={() => setActiveDoc(tab.id)}
                 className={`inline-flex min-h-[38px] items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
                   active
-                    ? "bg-teal-600 text-white shadow-xs dark:bg-teal-500 dark:text-slate-950"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                    ? "bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
@@ -819,25 +819,25 @@ export function AppDocsHubView({
           })}
         </div>
 
-        <div className="space-y-4 p-6 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+        <div className="space-y-4 p-6 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
           {activeDoc === "networking" && (
             locale === "vi" ? (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   1. Tại sao hai máy tính không thể gửi tệp trực tiếp cho nhau mà cần Relay?
                 </h3>
                 <p>
                   Hầu hết thiết bị nằm sau router Wi-Fi sử dụng <strong>NAT (Network Address Translation)</strong> và tường lửa. Thiết bị chỉ có IP nội bộ (như <code className="font-mono">192.168.1.5</code>) nên thiết bị ở mạng khác không thể tự mở kết nối TCP tới bạn. <strong>Relay Server</strong> đóng vai trò phòng gặp mặt trung gian có địa chỉ công cộng: cả người gửi lẫn người nhận đều chủ động kết nối ra ngoài tới Relay cùng một tên phòng (Room), rồi Relay làm ống dẫn chuyển tiếp gói tin.
                 </p>
 
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   2. PAKE + HKDF + AES-256-GCM là gì? Relay có đọc trộm được tệp không?
                 </h3>
                 <p>
                   <strong>Hoàn toàn không!</strong> Trước khi gửi bất kỳ byte dữ liệu nào, hai máy thực hiện bắt tay mật mã <strong>PAKE (Password-Authenticated Key Exchange)</strong> dựa trên đường cong Elliptic P-256. Hai bên dùng mã bí mật ngắn (Codephrase) để đồng thuận ra một khóa phiên mạnh 256-bit thông qua <strong>HKDF-SHA-256</strong> mà <em>không bao giờ gửi nguyên văn Codephrase qua mạng</em>. Sau đó mọi tệp đều bị mã hóa bằng <strong>AES-256-GCM</strong> kèm IV ngẫu nhiên cho từng gói trên máy gửi trước khi chạm tới Relay — Relay chỉ thấy các khối byte ngẫu nhiên.
                 </p>
 
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   3. Tại sao phải cắt Chunk, dùng Folder Manifest SHA-256 và chia 2 Relay?
                 </h3>
                 <ul className="list-disc space-y-1.5 pl-5">
@@ -851,21 +851,21 @@ export function AppDocsHubView({
               </>
             ) : (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   1. The Core Networking Problem: Why Can't Two Devices Connect Directly?
                 </h3>
                 <p>
                   Most client devices reside behind Wi-Fi routers using <strong>NAT (Network Address Translation)</strong> and stateful firewalls. Each device is assigned a non-routable private IP (e.g., <code className="font-mono">192.168.1.5</code>). An external device cannot initiate inbound TCP connections due to firewall packet dropping. The <strong>Rendezvous Relay Server</strong> solves this by accepting outbound connections from both peers into a shared room keyed by codephrase, relaying binary streams transparently.
                 </p>
 
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   2. PAKE + HKDF + AES-256-GCM: Can Relay Operators Eavesdrop on Files?
                 </h3>
                 <p>
                   <strong>No.</strong> Encryption and key exchange are strictly client-side. The peers negotiate an ephemeral key exchange over NIST P-256 blinded by the secret codephrase via <strong>PAKE v2</strong>. The shared point is fed into <strong>HKDF-SHA-256</strong> to derive a 256-bit symmetric session key and mutual authentication tags. All payload frames are encrypted using <strong>AES-256-GCM</strong> with unique 12-byte initialization vectors per packet.
                 </p>
 
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   3. Multi-path Dual-Relay Scheduling & SHA-256 Chunk Resume
                 </h3>
                 <ul className="list-disc space-y-1.5 pl-5">
@@ -883,31 +883,31 @@ export function AppDocsHubView({
           {activeDoc === "architecture" && (
             locale === "vi" ? (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   Bản đồ kiến trúc mã nguồn CrocFlow
                 </h3>
                 <ul className="space-y-2.5 text-xs">
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">server.ts & server/bridge-allowlist.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">server.ts & server/bridge-allowlist.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Máy chủ Express + WebSocket chạy cổng 3000. Cung cấp cầu nối <code className="font-mono">/ws</code> nối trình duyệt tới TCP Relay của Croc gốc (có danh sách trắng host/port chặn SSRF) và endpoint <code className="font-mono">/api/relays/ping</code> đo RTT thật.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">server/local-dual-relay.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">server/local-dual-relay.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Triển khai cặp phòng Relay độc lập <strong>Alpha</strong> và <strong>Beta</strong> trên <code className="font-mono">/ws-dual</code>, đếm số byte và gói tin chuyển tiếp thật theo từng kênh.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">src/protocol/croc/*</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">src/protocol/croc/*</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Bộ giao thức Croc v11 viết thuần TypeScript (PAKE P-256, XXH64, nén, cắt luồng) tương thích trực tiếp với <code className="font-mono">croc</code> CLI và <code className="font-mono">getcroc.com</code> mà không cần Go WASM.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">src/protocol/enhanced/manifest.ts · dual-relay-scheduler.ts · resume-cache.ts · enhanced-client.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">src/protocol/enhanced/manifest.ts · dual-relay-scheduler.ts · resume-cache.ts · enhanced-client.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Lõi tính năng mở rộng: lập Folder Manifest có kiểm tra chống path traversal (<code className="font-mono">sanitizeRelativePath</code>), chia tải Chẵn/Lẻ & Failover, lưu Chunk đã xác thực vào IndexedDB.
                     </p>
                   </li>
@@ -915,31 +915,31 @@ export function AppDocsHubView({
               </>
             ) : (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   Key Codebase Modules & Architecture Map
                 </h3>
                 <ul className="space-y-2.5 text-xs">
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">server.ts & server/bridge-allowlist.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">server.ts & server/bridge-allowlist.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Express + WebSocket server on port 3000. Houses the allowlisted TCP bridge <code className="font-mono">/ws</code> (anti-SSRF sanitization) and real RTT latency endpoint <code className="font-mono">/api/relays/ping</code>.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">server/local-dual-relay.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">server/local-dual-relay.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Implements in-memory isolated <strong>Alpha</strong> and <strong>Beta</strong> relay rooms on <code className="font-mono">/ws-dual</code>, counting relayed bytes and frames per channel.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">src/protocol/croc/*</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">src/protocol/croc/*</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Pure TypeScript Croc v11 protocol stack (PAKE P-256, XXH64, binary framing) interoperable directly with official <code className="font-mono">croc</code> CLI without Go WASM overhead.
                     </p>
                   </li>
-                  <li className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800">
-                    <strong className="font-mono text-teal-700 dark:text-teal-400">src/protocol/enhanced/manifest.ts · dual-relay-scheduler.ts · resume-cache.ts · enhanced-client.ts</strong>
-                    <p className="mt-1">
+                  <li className="rounded-xl bg-zinc-50 p-3.5 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800">
+                    <strong className="font-mono text-zinc-900 dark:text-zinc-100">src/protocol/enhanced/manifest.ts · dual-relay-scheduler.ts · resume-cache.ts · enhanced-client.ts</strong>
+                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
                       Enhanced protocol engine: Folder manifest with path sanitization (<code className="font-mono">sanitizeRelativePath</code>), even/odd chunk scheduling with dynamic failover, and IndexedDB caching.
                     </p>
                   </li>
@@ -951,10 +951,10 @@ export function AppDocsHubView({
           {activeDoc === "demo" && (
             locale === "vi" ? (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   Quy trình trình diễn & đánh giá kỹ thuật 5 phút
                 </h3>
-                <ol className="list-decimal space-y-2 pl-5">
+                <ol className="list-decimal space-y-2 pl-5 text-zinc-600 dark:text-zinc-400">
                   <li>
                     <strong>Phút 1 — Tương thích chuẩn Croc v11:</strong> Chọn chế độ <em>Gửi → Chuẩn Croc v11</em>, chia sẻ mã QR hoặc lệnh <code className="font-mono">croc &lt;codephrase&gt;</code>, nhận thử từ Terminal để chứng minh tương thích 100% với CLI chính thức.
                   </li>
@@ -974,10 +974,10 @@ export function AppDocsHubView({
               </>
             ) : (
               <>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   5-Minute Technical Evaluation & Live Verification Walkthrough
                 </h3>
-                <ol className="list-decimal space-y-2 pl-5">
+                <ol className="list-decimal space-y-2 pl-5 text-zinc-600 dark:text-zinc-400">
                   <li>
                     <strong>Minute 1 — Standard Croc v11 Interoperability:</strong> On the <em>Send</em> tab, select <em>Standard Croc v11</em>. Share codephrase or QR code, and receive using <code className="font-mono">croc &lt;codephrase&gt;</code> in a terminal to verify byte-for-byte CLI interop.
                   </li>

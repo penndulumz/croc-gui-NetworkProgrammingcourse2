@@ -221,7 +221,7 @@ export const App: React.FC = () => {
                 type="button"
                 aria-expanded={mobileInspectorOpen}
                 onClick={() => setMobileInspectorOpen((prev) => !prev)}
-                className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-200/80 bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-xs dark:border-slate-800/80 dark:bg-slate-900/95 dark:text-slate-100"
+                className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-zinc-200/80 bg-white/95 px-4 py-2.5 text-xs font-semibold text-zinc-900 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/95 dark:text-zinc-100"
               >
                 <span className="inline-flex items-center gap-2">
                   <Activity className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />

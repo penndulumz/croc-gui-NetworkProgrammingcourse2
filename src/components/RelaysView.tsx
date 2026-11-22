@@ -237,10 +237,10 @@ export function RelaysView({
       {/* Top Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
             {t.relays.title}
           </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {t.relays.subtitle}
           </p>
         </div>
@@ -248,9 +248,9 @@ export function RelaysView({
           type="button"
           disabled={probing}
           onClick={() => void handleProbeAll()}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-teal-700 disabled:opacity-60 transition-all"
+          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white disabled:opacity-60 transition-all"
         >
-          <RefreshCw className={`h-4 w-4 ${probing ? "animate-spin" : ""}`} aria-hidden="true" />
+          <RefreshCw className={`h-3.5 w-3.5 ${probing ? "animate-spin" : ""}`} aria-hidden="true" />
           <span>{probing ? t.relays.measuring : t.relays.measureRttBtn}</span>
         </button>
       </div>
@@ -260,18 +260,24 @@ export function RelaysView({
         <button
           type="button"
           onClick={() => onChangeRelayProfile("public")}
-          className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
+          className={`flex items-start gap-3.5 rounded-2xl border p-4 text-left transition-all ${
             relayProfile === "public"
-              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900"
+              ? "border-zinc-900 bg-zinc-50/80 shadow-xs ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800/60 dark:ring-zinc-100"
+              : "border-zinc-200/80 bg-white hover:bg-zinc-50/60 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/40"
           }`}
         >
-          <Globe className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+            relayProfile === "public"
+              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+          }`}>
+            <Globe className="h-4 w-4" aria-hidden="true" />
+          </div>
           <div>
-            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t.relays.profilePublic}
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               {t.relays.profilePublicDesc}
             </p>
           </div>
@@ -280,18 +286,24 @@ export function RelaysView({
         <button
           type="button"
           onClick={() => onChangeRelayProfile("local-lab")}
-          className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
+          className={`flex items-start gap-3.5 rounded-2xl border p-4 text-left transition-all ${
             relayProfile === "local-dual" || relayProfile === "local-lab"
-              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900"
+              ? "border-zinc-900 bg-zinc-50/80 shadow-xs ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800/60 dark:ring-zinc-100"
+              : "border-zinc-200/80 bg-white hover:bg-zinc-50/60 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/40"
           }`}
         >
-          <Server className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
+            relayProfile === "local-dual" || relayProfile === "local-lab"
+              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+          }`}>
+            <Server className="h-4 w-4" aria-hidden="true" />
+          </div>
           <div>
-            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t.relays.profileLocalLab}
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               {t.relays.profileLocalLabDesc}
             </p>
           </div>
@@ -301,62 +313,62 @@ export function RelaysView({
       {/* Live Local Dual-Relay Counters */}
       {relayStatus && (
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                 {locale === "vi" ? "Relay Alpha · Luồng Chẵn (0, 2, 4...)" : "Relay Alpha · Even Stream (0, 2, 4...)"}
               </span>
-              <Radio className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              <Radio className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             </div>
             <div className="mt-3 flex items-baseline gap-5 font-mono tabular-nums">
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {formatBytes(relayStatus.localDualRelay.alpha.bytesRelayed)}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">{t.relays.bytesRelayed}</div>
+                <div className="text-[11px] text-zinc-500 font-sans">{t.relays.bytesRelayed}</div>
               </div>
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {relayStatus.localDualRelay.alpha.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">Chunks</div>
+                <div className="text-[11px] text-zinc-500 font-sans">Chunks</div>
               </div>
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {relayStatus.localDualRelay.alpha.activeRooms}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">
+                <div className="text-[11px] text-zinc-500 font-sans">
                   {locale === "vi" ? "Phòng mở" : "Active Rooms"}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400">
                 {locale === "vi" ? "Relay Beta · Luồng Lẻ (1, 3, 5...) + Failover" : "Relay Beta · Odd Stream (1, 3, 5...) + Failover"}
               </span>
               <Activity className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
             </div>
             <div className="mt-3 flex items-baseline gap-5 font-mono tabular-nums">
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {formatBytes(relayStatus.localDualRelay.beta.bytesRelayed)}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">{t.relays.bytesRelayed}</div>
+                <div className="text-[11px] text-zinc-500 font-sans">{t.relays.bytesRelayed}</div>
               </div>
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {relayStatus.localDualRelay.beta.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">Chunks</div>
+                <div className="text-[11px] text-zinc-500 font-sans">Chunks</div>
               </div>
               <div>
-                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
                   {relayStatus.localDualRelay.beta.activeRooms}
                 </div>
-                <div className="text-[11px] text-slate-500 font-sans">
+                <div className="text-[11px] text-zinc-500 font-sans">
                   {locale === "vi" ? "Phòng mở" : "Active Rooms"}
                 </div>
               </div>
@@ -366,16 +378,16 @@ export function RelaysView({
       )}
 
       {/* Ranked Relay Table */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
-        <div className="border-b border-slate-200/80 px-5 py-3.5 dark:border-slate-800/80">
-          <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+      <section className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
+        <div className="border-b border-zinc-200/80 px-5 py-3.5 dark:border-zinc-800/80">
+          <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {t.relays.rankTitle}
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-500 dark:border-slate-800/80 dark:bg-slate-950/60 dark:text-slate-400">
+              <tr className="border-b border-zinc-200/80 bg-zinc-50/70 text-zinc-500 dark:border-zinc-800/80 dark:bg-zinc-950/60 dark:text-zinc-400">
                 <th className="px-5 py-3 font-semibold">Relay Node</th>
                 <th className="hidden px-5 py-3 font-semibold sm:table-cell">
                   {locale === "vi" ? "Địa chỉ" : "Address"}
@@ -385,12 +397,12 @@ export function RelaysView({
                 <th className="px-5 py-3 text-right font-semibold">{t.common.actions}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
               {nodes.map((node) => (
-                <tr key={node.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                <tr key={node.id} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors">
+                  <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100">
                     <div className="font-semibold">{node.name}</div>
-                    <div className="font-mono text-[11px] text-slate-500 sm:hidden">
+                    <div className="font-mono text-[11px] text-zinc-500 sm:hidden">
                       {node.address}
                     </div>
                     {node.error && (
@@ -399,12 +411,12 @@ export function RelaysView({
                       </div>
                     )}
                   </td>
-                  <td className="hidden px-5 py-3.5 font-mono text-slate-600 sm:table-cell dark:text-slate-400">
+                  <td className="hidden px-5 py-3.5 font-mono text-zinc-600 sm:table-cell dark:text-zinc-400">
                     {node.address}
                   </td>
-                  <td className="px-5 py-3.5 font-mono font-bold tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100">
+                  <td className="px-5 py-3.5 font-mono font-bold tabular-nums whitespace-nowrap text-zinc-900 dark:text-zinc-100">
                     {node.status === "probing" ? (
-                      <span className="text-teal-600 dark:text-teal-400">{t.relays.measuring}</span>
+                      <span className="text-zinc-500">{t.relays.measuring}</span>
                     ) : node.rttMs !== null ? (
                       <span className={node.rttMs < 60 ? "text-emerald-600 dark:text-emerald-400" : node.rttMs < 150 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}>
                         {node.rttMs} ms
@@ -425,9 +437,9 @@ export function RelaysView({
                         {t.common.offline}
                       </span>
                     ) : node.status === "probing" ? (
-                      <span className="text-teal-700 dark:text-teal-400">{t.relays.measuring}</span>
+                      <span className="text-zinc-500">{t.relays.measuring}</span>
                     ) : (
-                      <span className="text-slate-400">{t.common.idle}</span>
+                      <span className="text-zinc-400">{t.common.idle}</span>
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-right whitespace-nowrap">
@@ -436,13 +448,13 @@ export function RelaysView({
                         type="button"
                         onClick={() => handleRemoveCustomRelay(node.id)}
                         aria-label={`Delete relay ${node.name}`}
-                        className="inline-flex items-center gap-1 text-rose-600 hover:underline dark:text-rose-400 font-semibold"
+                        className="inline-flex items-center gap-1 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 font-semibold transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         {t.common.delete}
                       </button>
                     ) : (
-                      <span className="text-slate-400 text-[11px] font-mono">
+                      <span className="text-zinc-400 text-[11px] font-mono">
                         {locale === "vi" ? "Mặc định" : "Default"}
                       </span>
                     )}
@@ -455,11 +467,11 @@ export function RelaysView({
       </section>
 
       {/* Add Custom Relay Form */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
-        <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
+        <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           {t.relays.customModalTitle}
         </h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           {locale === "vi"
             ? "Lưu cấu hình máy chủ croc relay riêng của nhóm bạn để dùng cùng CROC_RELAY_HOSTS trên Bridge Server."
             : "Save custom self-hosted croc relay endpoints to connect over the Bridge Server."}
@@ -467,7 +479,7 @@ export function RelaysView({
 
         <form onSubmit={handleAddCustomRelay} className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-4">
           <div>
-            <label htmlFor="custom-relay-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label htmlFor="custom-relay-name" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               {t.relays.customNameLabel}
             </label>
             <input
@@ -476,11 +488,11 @@ export function RelaysView({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g. Lab VPS #1"
-              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+              className="mt-1 min-h-[40px] w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
           </div>
           <div>
-            <label htmlFor="custom-relay-host" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label htmlFor="custom-relay-host" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               {t.relays.customHostLabel}
             </label>
             <input
@@ -489,11 +501,11 @@ export function RelaysView({
               value={newHost}
               onChange={(e) => setNewHost(e.target.value)}
               placeholder="relay.example.com"
-              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+              className="mt-1 min-h-[40px] w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
           </div>
           <div>
-            <label htmlFor="custom-relay-port" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label htmlFor="custom-relay-port" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               {t.relays.customPortLabel}
             </label>
             <input
@@ -502,13 +514,13 @@ export function RelaysView({
               value={newPort}
               onChange={(e) => setNewPort(e.target.value)}
               placeholder="9009"
-              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+              className="mt-1 min-h-[40px] w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
           </div>
           <div className="flex items-end">
             <button
               type="submit"
-              className="inline-flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 shadow-xs transition-colors"
+              className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               <span>{t.relays.saveRelayBtn}</span>

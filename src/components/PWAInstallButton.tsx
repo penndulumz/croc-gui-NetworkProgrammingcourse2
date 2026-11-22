@@ -34,7 +34,7 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
         type="button"
         onClick={() => void handleClick()}
         aria-label="Cài đặt ứng dụng CrocFlow"
-        className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-teal-600/30 bg-teal-600/10 px-3 py-1.5 text-xs font-semibold text-teal-800 transition-colors hover:bg-teal-600/15 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-300 dark:hover:bg-teal-400/20 ${
+        className={`inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 shadow-xs transition-all ${
           compact ? "px-2.5" : "px-3.5"
         }`}
       >
@@ -47,15 +47,15 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
           role="dialog"
           aria-modal="true"
           aria-label="Hướng dẫn cài đặt ứng dụng CrocFlow"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/70 p-4 backdrop-blur-xs"
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-base font-semibold text-zinc-900 dark:text-zinc-100">
                   Cài đặt CrocFlow lên thiết bị
                 </h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   Chạy độc lập như ứng dụng Android/Desktop, không cần mở trình duyệt.
                 </p>
               </div>
@@ -63,16 +63,16 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
                 type="button"
                 onClick={() => setShowGuideModal(false)}
                 aria-label="Đóng hộp thoại cài đặt"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
             {isIOS ? (
-              <ol className="mt-4 space-y-2.5 text-sm text-slate-700 dark:text-slate-300">
+              <ol className="mt-4 space-y-2.5 text-xs text-zinc-700 dark:text-zinc-300">
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     01.
                   </span>
                   <span>
@@ -81,7 +81,7 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     02.
                   </span>
                   <span>
@@ -89,16 +89,16 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     03.
                   </span>
                   <span>Nhấn <strong>Thêm</strong> để mở CrocFlow toàn màn hình.</span>
                 </li>
               </ol>
             ) : (
-              <ol className="mt-4 space-y-2.5 text-sm text-slate-700 dark:text-slate-300">
+              <ol className="mt-4 space-y-2.5 text-xs text-zinc-700 dark:text-zinc-300">
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     01.
                   </span>
                   <span>
@@ -107,7 +107,7 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     02.
                   </span>
                   <span>
@@ -115,7 +115,7 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="mt-0.5 font-mono text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span className="mt-0.5 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     03.
                   </span>
                   <span>
@@ -129,7 +129,7 @@ export function PWAInstallButton({ compact = false }: PWAInstallButtonProps) {
               <button
                 type="button"
                 onClick={() => setShowGuideModal(false)}
-                className="min-h-[40px] rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+                className="min-h-[38px] rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white shadow-xs transition-all"
               >
                 Đã hiểu
               </button>

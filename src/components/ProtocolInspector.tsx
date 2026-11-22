@@ -19,7 +19,7 @@ import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
 
 const CHUNK_COLOR: Record<ChunkVisualState, string> = {
-  pending: "bg-slate-200 dark:bg-slate-800",
+  pending: "bg-zinc-200 dark:bg-zinc-800",
   alpha: "bg-teal-500 dark:bg-teal-400",
   beta: "bg-sky-500 dark:bg-sky-400",
   verified: "bg-emerald-500 dark:bg-emerald-400",
@@ -54,7 +54,7 @@ function ThroughputSparkline({
 }) {
   if (samples.length < 2) {
     return (
-      <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-200 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+      <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
         {emptyText}
       </div>
     );
@@ -73,7 +73,7 @@ function ThroughputSparkline({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-16 w-full overflow-visible rounded-lg bg-slate-50 px-1 dark:bg-slate-950/60"
+      className="h-16 w-full overflow-visible rounded-xl bg-zinc-50 px-1 dark:bg-zinc-950/60"
       role="img"
       aria-label="Throughput sparkline graph"
     >
@@ -83,7 +83,7 @@ function ThroughputSparkline({
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="text-teal-600 dark:text-teal-400"
+        className="text-emerald-500 dark:text-emerald-400"
         points={points}
       />
     </svg>
@@ -153,19 +153,19 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
   return (
     <aside
       aria-label={t.inspector.title}
-      className="flex flex-col rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/80 dark:bg-[#111827]/95 backdrop-blur-md"
+      className="flex flex-col rounded-2xl border border-zinc-200/80 bg-white/95 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/95 backdrop-blur-md"
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3.5 dark:border-slate-800/80">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-200/80 px-4 py-3.5 dark:border-zinc-800/80">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
             <Activity className="h-4 w-4 shrink-0" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+            <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t.inspector.title}
             </h2>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400 font-mono">
+            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400 font-mono">
               {snap.sessionId
                 ? `${snap.mode === "enhanced" ? "Dual-Relay" : "Croc v11"} · ${snap.active ? (locale === "vi" ? "Đang chạy" : "Active") : (locale === "vi" ? "Hoàn tất" : "Idle")}`
                 : locale === "vi"
@@ -181,7 +181,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
             disabled={snap.events.length === 0}
             aria-label={t.inspector.exportLogBtn}
             title={t.inspector.exportLogBtn}
-            className="inline-flex min-h-[34px] shrink-0 whitespace-nowrap items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+            className="inline-flex min-h-[34px] shrink-0 whitespace-nowrap items-center gap-1 rounded-xl border border-zinc-200 px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] disabled:opacity-40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
           >
             <Download className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{locale === "vi" ? "Xuất Log" : "Export"}</span>
@@ -191,7 +191,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
             onClick={() => protocolEventBus.reset()}
             aria-label="Reset Inspector"
             title="Reset"
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 transition-all"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -202,7 +202,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
         {/* 1. PAKE / Encryption Handshake Timeline */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               {locale === "vi" ? "1. Bắt tay mã hóa E2E" : "1. Cryptographic Handshake"}
             </h3>
             <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
@@ -220,26 +220,26 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
                   {step.status === "done" ? (
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                   ) : step.status === "active" ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-900 dark:text-zinc-100" aria-hidden="true" />
                   ) : step.status === "error" ? (
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden="true" />
                   ) : (
-                    <Circle className="h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-700" aria-hidden="true" />
+                    <Circle className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-700" aria-hidden="true" />
                   )}
                   <span
                     className={`truncate ${
                       step.status === "done"
-                        ? "font-medium text-slate-900 dark:text-slate-100"
+                        ? "font-medium text-zinc-900 dark:text-zinc-100"
                         : step.status === "active"
-                          ? "font-semibold text-teal-700 dark:text-teal-300"
-                          : "text-slate-500 dark:text-slate-400"
+                          ? "font-semibold text-zinc-900 dark:text-zinc-100"
+                          : "text-zinc-500 dark:text-zinc-400"
                     }`}
                   >
                     {step.label}
                   </span>
                 </div>
                 {step.timestamp && (
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-slate-400">
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-zinc-400">
                     {formatTimeShort(step.timestamp)}
                   </span>
                 )}
@@ -251,12 +251,12 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
         {/* 2. Chunk Allocation Map */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? `2. Bản đồ phân bổ Chunk (${snap.totalChunks})`
                 : `2. Chunk Allocation Matrix (${snap.totalChunks})`}
             </h3>
-            <span className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400 font-semibold">
+            <span className="font-mono text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400 font-semibold">
               Alpha {snap.alphaChunks} · Beta {snap.betaChunks}
             </span>
           </div>
@@ -264,7 +264,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
           {snap.chunkStates.length > 0 ? (
             <div
               data-testid="chunk-grid"
-              className="grid grid-cols-12 gap-1 rounded-xl bg-slate-50 p-2 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800"
+              className="grid grid-cols-12 gap-1 rounded-xl bg-zinc-50 p-2 dark:bg-zinc-950/60 border border-zinc-100 dark:border-zinc-800"
             >
               {snap.chunkStates.map((st, idx) => (
                 <div
@@ -275,7 +275,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <div className="rounded-xl border border-dashed border-zinc-200 px-3 py-4 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
               {locale === "vi"
                 ? "Chưa có Chunk nào được lập lịch. Hãy gửi tệp hoặc chạy Demo để quan sát phân luồng Chẵn / Lẻ."
                 : "No active chunks scheduled yet. Start a transfer or run a live demo to inspect even/odd streaming."}
@@ -283,7 +283,7 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
           )}
 
           {/* Explicit Legend */}
-          <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-400">
+          <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-600 dark:text-zinc-400">
             <span className="inline-flex items-center gap-1 font-medium">
               <span className="h-2.5 w-2.5 rounded-[2px] bg-teal-500" /> {t.inspector.legendAlpha}
             </span>
@@ -305,10 +305,10 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
         {/* 3. Throughput Metrics & Sparkline */}
         <div>
           <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               {locale === "vi" ? "3. Thông lượng thực tế" : "3. Real-Time Throughput"}
             </h3>
-            <span className="font-mono text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            <span className="font-mono text-xs font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
               {formatSpeed(snap.currentSpeedBps)} · {formatBytes(snap.bytesTransferred)}
             </span>
           </div>
@@ -324,13 +324,13 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
 
         {/* 4. Event Stream */}
         <div>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             {locale === "vi"
               ? `4. Nhật ký sự kiện (${snap.events.length})`
               : `4. Live Event Stream (${snap.events.length})`}
           </h3>
           {snap.events.length === 0 ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? "Sẵn sàng ghi nhận các gói bắt tay PAKE, sự kiện Resume Cache và Failover."
                 : "Standby for PAKE handshakes, resume cache events, and failover notifications."}
@@ -340,17 +340,17 @@ export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
               {snap.events.slice(0, 20).map((ev) => (
                 <li
                   key={ev.id}
-                  className="border-b border-slate-100 pb-1.5 last:border-b-0 dark:border-slate-800/80"
+                  className="border-b border-zinc-100 pb-1.5 last:border-b-0 dark:border-zinc-800/80"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
                       {ev.title}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-400">
+                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-400">
                       {formatTimeShort(ev.timestamp)}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
                     {ev.detail}
                   </p>
                 </li>

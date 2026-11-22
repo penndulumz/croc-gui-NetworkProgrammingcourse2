@@ -481,10 +481,10 @@ export function SendView({
       {/* Page Title */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
             {t.send.title}
           </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {t.send.subtitle}
           </p>
         </div>
@@ -504,21 +504,21 @@ export function SendView({
       />
 
       {/* Main Transfer Card */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
         {/* Active Relay Profile Badge */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3.5 py-2 text-xs border border-slate-200 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50/70 px-3.5 py-2 text-xs border border-zinc-200/80 dark:border-zinc-800/80 dark:bg-zinc-950/60">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-500 dark:text-slate-400">Hồ sơ Relay:</span>
+            <span className="font-medium text-zinc-500 dark:text-zinc-400">Hồ sơ Relay:</span>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold ${
                 isLocalProfile
-                  ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
-                  : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300/40"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
               }`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  isLocalProfile ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                  isLocalProfile ? "bg-emerald-400 animate-pulse" : "bg-emerald-500"
                 }`}
                 aria-hidden="true"
               />
@@ -534,7 +534,7 @@ export function SendView({
               onClick={() =>
                 onChangeRelayProfile(isLocalProfile ? "public" : "local-lab")
               }
-              className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium underline-offset-2 hover:underline disabled:opacity-50"
+              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 font-medium underline-offset-2 hover:underline disabled:opacity-50 transition-colors"
             >
               Đổi sang {isLocalProfile ? "Public Croc Relays" : "Local Lab"}
             </button>
@@ -543,7 +543,7 @@ export function SendView({
 
         {/* Guidance when Local Dual-Relay Lab is active in Standard Mode */}
         {mode === "standard" && isLocalProfile && (
-          <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/80 p-3.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/5 dark:text-amber-200">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <div>
@@ -558,14 +558,14 @@ export function SendView({
 
         {/* Payload Selector Header */}
         {mode === "standard" ? (
-          <div className="mb-4 flex items-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
+          <div className="mb-4 flex items-center gap-2 border-b border-zinc-200/80 pb-3 dark:border-zinc-800/80">
             <button
               type="button"
               onClick={() => setPayloadKind("files")}
-              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                 payloadKind === "files"
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs"
+                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               }`}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
@@ -574,10 +574,10 @@ export function SendView({
             <button
               type="button"
               onClick={() => setPayloadKind("text")}
-              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                 payloadKind === "text"
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs"
+                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               }`}
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
@@ -585,41 +585,41 @@ export function SendView({
             </button>
           </div>
         ) : (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3.5 dark:border-slate-800">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 pb-3.5 dark:border-zinc-800/80">
             <div className="flex flex-wrap items-center gap-4">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-800 dark:text-zinc-200">
                 <input
                   type="checkbox"
                   checked={dualRelay}
                   disabled={busy}
                   onChange={(e) => setDualRelay(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
                 />
                 Chế độ 2 Relay (Alpha Chẵn / Beta Lẻ)
               </label>
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-800 dark:text-zinc-200">
                 <input
                   type="checkbox"
                   checked={targetFastestRelay}
                   disabled={busy}
                   onChange={(e) => setTargetFastestRelay(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
                 />
                 Định tuyến trực tiếp qua Relay Node nhanh nhất
                 {fastestProbedRelay && (
-                  <span className="text-xs font-normal text-teal-700 dark:text-teal-400">
+                  <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400">
                     (⚡ {fastestProbedRelay.host} · {fastestProbedRelay.rttMs} ms)
                   </span>
                 )}
               </label>
-              <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                 <label htmlFor="chunk-size-select">Kích thước Chunk:</label>
                 <select
                   id="chunk-size-select"
                   value={chunkSize}
                   disabled={busy}
                   onChange={(e) => setChunkSize(Number(e.target.value))}
-                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  className="rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 font-mono text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-hidden"
                 >
                   <option value={16 * 1024}>16 KB (Dễ soi lưới)</option>
                   <option value={64 * 1024}>64 KB (Cân bằng)</option>
@@ -635,7 +635,7 @@ export function SendView({
           <div className="space-y-2">
             <label
               htmlFor="croc-text-payload"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+              className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
             >
               Nội dung văn bản gửi mã hóa
             </label>
@@ -646,9 +646,9 @@ export function SendView({
               disabled={busy}
               onChange={(e) => setTextPayload(e.target.value)}
               placeholder="Nhập ghi chú, cấu hình hoặc đoạn mã nguồn cần gửi an toàn…"
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
-            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
               <span>Bên nhận sẽ xem trực tiếp trên màn hình thay vì tự tải xuống.</span>
               <span className="font-mono tabular-nums">
                 {formatBytes(textByteCount)} / 1 MB
@@ -1068,12 +1068,12 @@ export function SendView({
 
             {/* Granular Per-File Progress Bars for Multi-File Transfers */}
             {fileProgressList.length > 1 && (
-              <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+              <div className="mt-3 space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                <div className="flex items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300">
                   <span>
                     Tiến độ từng tệp ({fileProgressList.filter((f) => f.done).length}/{fileProgressList.length} hoàn tất)
                   </span>
-                  <span className="font-mono text-[11px] text-slate-500">
+                  <span className="font-mono text-[11px] text-zinc-500">
                     {Math.round(
                       (fileProgressList.filter((f) => f.done).length / fileProgressList.length) * 100,
                     )}
@@ -1095,18 +1095,18 @@ export function SendView({
                             {fp.done ? (
                               <Check className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                             ) : (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-500 animate-pulse" aria-hidden="true" />
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                             )}
-                            <span className="truncate font-mono text-slate-800 dark:text-slate-200">{fp.name}</span>
+                            <span className="truncate font-mono text-zinc-800 dark:text-zinc-200">{fp.name}</span>
                           </div>
-                          <div className="shrink-0 font-mono text-slate-500 dark:text-slate-400">
+                          <div className="shrink-0 font-mono text-zinc-500 dark:text-zinc-400">
                             {formatBytes(fp.transferred)} / {formatBytes(fp.size)} ({filePct}%)
                           </div>
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                           <div
                             className={`h-full rounded-full transition-all duration-150 ${
-                              fp.done ? "bg-emerald-500" : "bg-teal-500"
+                              fp.done ? "bg-emerald-500" : "bg-zinc-900 dark:bg-zinc-100"
                             }`}
                             style={{ width: `${filePct}%` }}
                           />

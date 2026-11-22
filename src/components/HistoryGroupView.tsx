@@ -245,10 +245,10 @@ export function HistoryGroupView({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
           {t.history.title}
         </h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           {t.history.subtitle}
         </p>
       </div>
@@ -256,23 +256,23 @@ export function HistoryGroupView({
       {/* Device Alias + Monthly Group Passphrase Row */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         {/* Device Alias Card */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 lg:col-span-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 lg:col-span-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
               <Smartphone className="h-4 w-4" aria-hidden="true" />
             </div>
-            <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+            <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t.history.deviceAliasTitle}
             </h2>
           </div>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
             {t.history.deviceAliasHint}
           </p>
           <form onSubmit={handleSaveAlias} className="mt-4 space-y-3">
             <div>
               <label
                 htmlFor="device-alias-input"
-                className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
+                className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300"
               >
                 {locale === "vi" ? "Tên thiết bị hiện tại" : "Current Device Alias"}
               </label>
@@ -282,16 +282,16 @@ export function HistoryGroupView({
                 maxLength={48}
                 value={aliasDraft}
                 onChange={(e) => setAliasDraft(e.target.value)}
-                className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                className="mt-1 min-h-[40px] w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
               />
             </div>
             <button
               type="submit"
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 shadow-xs transition-colors"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
             >
               {aliasSaved ? (
                 <>
-                  <Check className="h-4 w-4 text-emerald-400 dark:text-emerald-600" aria-hidden="true" />
+                  <Check className="h-3.5 w-3.5 text-emerald-400 dark:text-emerald-600" aria-hidden="true" />
                   <span>{t.common.saved}</span>
                 </>
               ) : (
@@ -302,22 +302,22 @@ export function HistoryGroupView({
         </section>
 
         {/* Monthly Rotating Group Passphrase Card */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 lg:col-span-7 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+        <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 lg:col-span-7 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                 <KeyRound className="h-4 w-4" aria-hidden="true" />
               </div>
-              <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {t.history.groupPassphraseTitle}
               </h2>
             </div>
-            <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
               {currentPeriod}
             </span>
           </div>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
             {t.history.groupPassphraseDesc}
           </p>
 
@@ -328,7 +328,7 @@ export function HistoryGroupView({
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               placeholder={t.history.groupNameLabel}
-              className="min-h-[40px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+              className="min-h-[40px] rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
             <input
               type="password"
@@ -336,11 +336,11 @@ export function HistoryGroupView({
               value={groupSecret}
               onChange={(e) => setGroupSecret(e.target.value)}
               placeholder={locale === "vi" ? "Khóa gốc (≥ 6 ký tự)" : "Master Secret (≥ 6 chars)"}
-              className="min-h-[40px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+              className="min-h-[40px] rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
             />
             <button
               type="submit"
-              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-teal-700 transition-colors"
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               <span>{t.history.newGroupBtn}</span>
@@ -353,7 +353,7 @@ export function HistoryGroupView({
           )}
 
           {groups.length > 0 ? (
-            <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            <ul className="mt-4 divide-y divide-zinc-100 rounded-xl border border-zinc-200/80 dark:divide-zinc-800/80 dark:border-zinc-800/80">
               {groups.map((g) => {
                 const derived = derivedMap[g.id];
                 return (
@@ -362,14 +362,14 @@ export function HistoryGroupView({
                     className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs"
                   >
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                         {g.groupName}
                       </div>
-                      <div className="mt-0.5 font-mono font-bold text-teal-600 dark:text-teal-400">
+                      <div className="mt-0.5 font-mono font-bold text-zinc-900 dark:text-zinc-100">
                         {derived ? derived.codephrase : (locale === "vi" ? "Đang dẫn xuất…" : "Deriving...")}
                       </div>
                       {derived && (
-                        <div className="mt-0.5 text-[11px] text-slate-500 font-mono">
+                        <div className="mt-0.5 text-[11px] text-zinc-500 font-mono">
                           {locale === "vi" ? `Đổi mã: ${derived.nextRotationDate} · Vân tay ${derived.fingerprint}` : `Rotates: ${derived.nextRotationDate} · FP: ${derived.fingerprint}`}
                         </div>
                       )}
@@ -380,14 +380,14 @@ export function HistoryGroupView({
                           <button
                             type="button"
                             onClick={() => onUseCodeForSend(derived.codephrase)}
-                            className="min-h-[34px] rounded-xl bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 transition-colors"
+                            className="min-h-[34px] rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
                           >
                             {t.history.useForSendBtn}
                           </button>
                           <button
                             type="button"
                             onClick={() => onUseCodeForReceive(derived.codephrase)}
-                            className="min-h-[34px] rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                            className="min-h-[34px] rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
                           >
                             {t.history.useForReceiveBtn}
                           </button>
@@ -397,7 +397,7 @@ export function HistoryGroupView({
                         type="button"
                         onClick={() => handleRemoveGroup(g.id)}
                         aria-label={`Remove group ${g.groupName}`}
-                        className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
+                        className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
@@ -407,7 +407,7 @@ export function HistoryGroupView({
               })}
             </ul>
           ) : (
-            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
               {locale === "vi"
                 ? "Chưa có Passphrase nhóm nào. Tạo một nhóm để chia sẻ tệp định kỳ mà không phải đọc lại mã mỗi lần gửi."
                 : "No group passphrases created yet. Create one to derive synchronized monthly transfer codes with collaborators."}
@@ -417,17 +417,17 @@ export function HistoryGroupView({
       </div>
 
       {/* Frequent Peer Presets Management Section */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
               <Users className="h-4 w-4" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {t.history.peerPresetsTitle}
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {t.history.peerPresetsDesc}
               </p>
             </div>
@@ -436,7 +436,7 @@ export function HistoryGroupView({
           {peers.length > 0 && (
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"
                 aria-hidden="true"
               />
               <input
@@ -445,15 +445,15 @@ export function HistoryGroupView({
                 onChange={(e) => setPeerSearchQuery(e.target.value)}
                 placeholder={locale === "vi" ? "Tìm thiết bị…" : "Search peers..."}
                 aria-label="Search peers"
-                className="min-h-[36px] w-48 rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+                className="min-h-[36px] w-48 rounded-xl border border-zinc-200 bg-zinc-50/70 pl-8 pr-3 text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 focus:outline-hidden"
               />
             </div>
           )}
         </div>
 
         {/* Add / Edit Peer Form */}
-        <form onSubmit={handleSavePeer} className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-950/40">
-          <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+        <form onSubmit={handleSavePeer} className="mt-4 rounded-xl border border-zinc-100 bg-zinc-50/70 p-4 dark:border-zinc-800/80 dark:bg-zinc-950/40">
+          <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
             {editingPeerId
               ? (locale === "vi" ? "Chỉnh sửa thông tin thiết bị" : "Edit Saved Peer")
               : (locale === "vi" ? "Thêm thiết bị quen thuộc mới" : "Add New Frequent Peer")}
@@ -468,7 +468,7 @@ export function HistoryGroupView({
                 onChange={(e) => setPeerAliasInput(e.target.value)}
                 placeholder={t.history.peerAliasLabel}
                 aria-label={t.history.peerAliasLabel}
-                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[38px] w-full rounded-xl border border-zinc-200 bg-white px-3 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
               />
             </div>
 
@@ -479,7 +479,7 @@ export function HistoryGroupView({
                   setPeerProfileInput(e.target.value as "default" | RelayProfileMode)
                 }
                 aria-label="Preferred Relay Profile"
-                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[38px] w-full rounded-xl border border-zinc-200 bg-white px-2.5 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
               >
                 <option value="default">{locale === "vi" ? "Hồ sơ: Mặc định" : "Profile: Default"}</option>
                 <option value="public">🌐 Public Croc Relays</option>
@@ -495,11 +495,11 @@ export function HistoryGroupView({
                 onChange={(e) => setPeerNotesInput(e.target.value)}
                 placeholder={t.history.peerNotesLabel}
                 aria-label={t.history.peerNotesLabel}
-                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[38px] w-full rounded-xl border border-zinc-200 bg-white px-3 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
               />
               <button
                 type="submit"
-                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-700 transition-colors"
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
               >
                 {editingPeerId ? (
                   <>
@@ -517,7 +517,7 @@ export function HistoryGroupView({
                 <button
                   type="button"
                   onClick={handleCancelEditPeer}
-                  className="inline-flex min-h-[38px] shrink-0 items-center rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                  className="inline-flex min-h-[38px] shrink-0 items-center rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{t.common.cancel}</span>
@@ -540,7 +540,7 @@ export function HistoryGroupView({
 
         {/* Existing Peers List */}
         {filteredPeers.length > 0 ? (
-          <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+          <ul className="mt-4 divide-y divide-zinc-100 rounded-xl border border-zinc-200/80 dark:divide-zinc-800/80 dark:border-zinc-800/80">
             {filteredPeers.map((p) => (
               <li
                 key={p.id}
@@ -548,8 +548,8 @@ export function HistoryGroupView({
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <Smartphone className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                    <span className="font-bold text-slate-900 dark:text-slate-100">
+                    <Smartphone className="h-4 w-4 text-zinc-600 dark:text-zinc-400" aria-hidden="true" />
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
                       {p.alias}
                     </span>
                     {p.preferredRelayProfile && (
@@ -557,8 +557,8 @@ export function HistoryGroupView({
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                           p.preferredRelayProfile === "local-dual" ||
                           p.preferredRelayProfile === "local-lab"
-                            ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
-                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                            ? "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border border-zinc-300/40"
+                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                         }`}
                       >
                         {p.preferredRelayProfile === "local-dual" ||
@@ -573,7 +573,7 @@ export function HistoryGroupView({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
                     {p.notes && <span>{p.notes}</span>}
                     <span>{locale === "vi" ? `Lần cuối: ${formatDate(p.lastSeen)}` : `Last seen: ${formatDate(p.lastSeen)}`}</span>
                   </div>
@@ -583,7 +583,7 @@ export function HistoryGroupView({
                   <button
                     type="button"
                     onClick={() => handleQuickSend(p)}
-                    className="inline-flex min-h-[34px] items-center gap-1 rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 shadow-xs transition-colors"
+                    className="inline-flex min-h-[34px] items-center gap-1 rounded-xl bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white shadow-xs transition-all"
                   >
                     <Send className="h-3 w-3" aria-hidden="true" />
                     <span>{locale === "vi" ? "Gửi nhanh" : "Quick Send"}</span>
@@ -592,7 +592,7 @@ export function HistoryGroupView({
                     type="button"
                     onClick={() => handleStartEditPeer(p)}
                     aria-label={`Edit ${p.alias}`}
-                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -600,7 +600,7 @@ export function HistoryGroupView({
                     type="button"
                     onClick={() => handleDeletePeer(p.id)}
                     aria-label={`Delete ${p.alias}`}
-                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -609,7 +609,7 @@ export function HistoryGroupView({
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
             {peerSearchQuery
               ? (locale === "vi" ? `Không tìm thấy thiết bị nào khớp với "${peerSearchQuery}".` : `No peers found matching "${peerSearchQuery}".`)
               : (locale === "vi" ? "Chưa lưu thiết bị nào. Thêm các thiết bị thường xuyên chuyển tệp để gửi một chạm dễ dàng." : "No saved peers yet. Save recurring collaborator devices for quick 1-click dispatch.")}
@@ -618,11 +618,11 @@ export function HistoryGroupView({
       </section>
 
       {/* Transfer History Table */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3.5 dark:border-slate-800/80">
+      <section className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/80 px-5 py-3.5 dark:border-zinc-800/80">
           <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+            <History className="h-4 w-4 text-zinc-600 dark:text-zinc-400" aria-hidden="true" />
+            <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t.history.transferHistoryTitle} ({filteredHistory.length})
             </h2>
           </div>
@@ -630,7 +630,7 @@ export function HistoryGroupView({
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"
                 aria-hidden="true"
               />
               <input
@@ -639,11 +639,11 @@ export function HistoryGroupView({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search transfer history"
                 placeholder={t.history.searchPlaceholder}
-                className="min-h-[36px] rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
+                className="min-h-[36px] rounded-xl border border-zinc-200 bg-zinc-50/70 pl-8 pr-3 text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 focus:outline-hidden"
               />
             </div>
 
-            <div className="inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
+            <div className="inline-flex rounded-xl border border-zinc-200 p-0.5 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70">
               {(["all", "send", "receive"] as const).map((f) => (
                 <button
                   key={f}
@@ -651,8 +651,8 @@ export function HistoryGroupView({
                   onClick={() => setDirectionFilter(f)}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
                     directionFilter === f
-                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                      ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs"
+                      : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
                   }`}
                 >
                   {f === "all" ? t.history.filterAll : f === "send" ? t.history.filterSend : t.history.filterReceive}
@@ -686,7 +686,7 @@ export function HistoryGroupView({
                   <button
                     type="button"
                     onClick={() => setConfirmClear(false)}
-                    className="min-h-[36px] rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                    className="min-h-[36px] rounded-xl border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:text-zinc-300"
                   >
                     {t.common.cancel}
                   </button>
@@ -696,45 +696,45 @@ export function HistoryGroupView({
         </div>
 
         {filteredHistory.length === 0 ? (
-          <div className="px-5 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+          <div className="px-5 py-10 text-center text-xs text-zinc-500 dark:text-zinc-400">
             {t.history.noHistoryYet}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-500 dark:border-slate-800/80 dark:bg-slate-950/60 dark:text-slate-400">
+                <tr className="border-b border-zinc-200/80 bg-zinc-50/70 text-zinc-500 dark:border-zinc-800/80 dark:bg-zinc-950/60 dark:text-zinc-400">
                   <th className="px-5 py-3 font-semibold">{locale === "vi" ? "Hướng & Nội dung" : "Direction & Payload"}</th>
                   <th className="hidden px-5 py-3 font-semibold md:table-cell">{locale === "vi" ? "Giao thức & Xác thực" : "Protocol & Verification"}</th>
                   <th className="px-5 py-3 font-semibold whitespace-nowrap">{t.common.bytes}</th>
                   <th className="hidden px-5 py-3 font-semibold sm:table-cell whitespace-nowrap">{locale === "vi" ? "Thời gian" : "Timestamp"}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                 {filteredHistory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <tr key={item.id} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-start gap-2.5">
                         {item.direction === "send" ? (
-                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shrink-0 mt-0.5">
                             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                           </div>
                         ) : (
-                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shrink-0 mt-0.5">
                             <ArrowDownLeft className="h-3.5 w-3.5" aria-hidden="true" />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="truncate font-semibold text-slate-900 dark:text-slate-100">
+                          <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
                             {item.summaryName}
                           </div>
-                          <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                          <div className="mt-0.5 font-mono text-[11px] text-zinc-500">
                             {item.codephrase} · {item.deviceAlias}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-5 py-3.5 text-slate-600 md:table-cell dark:text-slate-400">
+                    <td className="hidden px-5 py-3.5 text-zinc-600 md:table-cell dark:text-zinc-400">
                       <div>
                         {item.mode === "enhanced"
                           ? item.dualRelay
@@ -743,15 +743,15 @@ export function HistoryGroupView({
                           : "Croc v11"}{" "}
                         · {item.verifiedHash}
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-zinc-500">
                         {item.failoverTriggered ? (locale === "vi" ? "Có Failover Alpha→Beta · " : "Failover triggered · ") : ""}
                         {item.resumedChunks ? (locale === "vi" ? `Resume ${item.resumedChunks} chunks` : `Resumed ${item.resumedChunks} chunks`) : (locale === "vi" ? "Truyền mới 100%" : "Fresh transfer 100%")}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100 font-semibold">
+                    <td className="px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-zinc-900 dark:text-zinc-100 font-semibold">
                       {formatBytes(item.totalBytes)}
                     </td>
-                    <td className="hidden px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-slate-500 sm:table-cell">
+                    <td className="hidden px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-zinc-500 sm:table-cell">
                       {formatDate(item.timestamp)}
                     </td>
                   </tr>
