@@ -12,7 +12,7 @@ import {
 import {
   isValidLocalChannel,
   isValidRoomId,
-  LocalDualRelayHub,
+  LocalDualRelayNode,
 } from "./server/local-dual-relay.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,7 +52,7 @@ function measureTcpRtt(host: string, port: number, timeoutMs = 2500): Promise<{ 
 
 export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) {
   const bridgeConfig = options.bridgeConfig ?? parseBridgeConfig(process.env);
-  const dualRelayHub = new LocalDualRelayHub();
+  const dualRelayNode = new LocalDualRelayNode();
   const app = express();
 
   app.disable("x-powered-by");
@@ -65,7 +65,7 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
   app.get("/config.js", (_req, res) => {
     const controlPort = bridgeConfig.allowedPorts[0] || "9009";
     const runtimeConfig = {
-      gatewayURL: "/ws",
+      bridgeURL: "/ws",
       localDualRelayURL: "/ws-dual",
       relayAddresses: bridgeConfig.relayHosts.map((host) => `${host}:${controlPort}`),
       relayPassword: bridgeConfig.relayPassword,
@@ -88,7 +88,7 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
         address: `${host}:${controlPort}`,
         kind: "public",
       })),
-      localDualRelay: dualRelayHub.getStats(),
+      localDualRelay: dualRelayNode.getStats(),
       allowedPorts: bridgeConfig.allowedPorts,
     });
   });
@@ -229,7 +229,7 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
       }
 
       wssDual.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-        dualRelayHub.join(channel, room, role, ws);
+        dualRelayNode.join(channel, room, role, ws);
       });
       return;
     }
@@ -260,7 +260,8 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
   return {
     app,
     httpServer,
-    dualRelayHub,
+    dualRelayNode,
+    dualRelayHub: dualRelayNode,
     async listen(port = options.port ?? Number(process.env.PORT || 3000), host = options.host ?? "0.0.0.0") {
       await new Promise<void>((resolve) => {
         httpServer.listen(port, host, () => resolve());

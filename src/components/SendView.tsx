@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Zap,
 } from "lucide-react";
-import { generateCode } from "../protocol/croc/codephrase";
+import { asCodephrase, generateCode, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
 import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
 import { maxTextTransferBytes, type FileProgress } from "../protocol/croc/types";
 import {
@@ -28,7 +28,7 @@ import {
   type EnhancedControlHandle,
   type EnhancedProgress,
 } from "../protocol/enhanced/enhanced-client";
-import type { BridgePublicConfig } from "../lib/bridge-client";
+import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
 import { appendTransferHistory } from "../lib/history-store";
 import { formatBytes, formatSpeed } from "../lib/format";
 
@@ -149,8 +149,8 @@ export function SendView({
     setEnhProgress(null);
 
     const secret = codephrase.trim();
-    if (secret.length < 6) {
-      setErrorText("Codephrase phải dài tối thiểu 6 ký tự.");
+    if (!isCodephrase(secret)) {
+      setErrorText("Codephrase không hợp lệ (tối thiểu 6 ký tự, chỉ chứa chữ cái, số, gạch ngang).");
       return;
     }
 
@@ -183,15 +183,14 @@ export function SendView({
             ? await prepareText(textPayload, { onStatus: setStatusText }, controller.signal)
             : await prepareFiles(selectedFiles, { onStatus: setStatusText }, controller.signal);
 
-        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const gatewayURL = `${wsProto}//${window.location.host}/ws`;
+        const bridgeURL = deriveBridgeURL(window.location.protocol, window.location.host, "/ws");
 
         await sendFiles({
           files: prepared,
           sendingText: payloadKind === "text",
           secret,
           settings: {
-            gatewayURL,
+            bridgeURL,
             relayAddresses: bridgeConfig.relayAddresses,
             relayPassword: bridgeConfig.relayPassword,
             storeAPI: "",

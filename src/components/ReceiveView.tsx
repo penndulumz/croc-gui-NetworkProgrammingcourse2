@@ -26,7 +26,8 @@ import {
   getResumeCacheSummary,
   type ResumeCacheSummary,
 } from "../protocol/enhanced/resume-cache";
-import type { BridgePublicConfig } from "../lib/bridge-client";
+import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
+import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
 import { downloadBinaryFile, formatBytes, formatSpeed } from "../lib/format";
 
@@ -126,8 +127,8 @@ export function ReceiveView({
     setReceivedFiles([]);
 
     const secret = codephrase.trim();
-    if (secret.length < 6) {
-      setErrorText("Vui lòng nhập Codephrase hợp lệ (tối thiểu 6 ký tự).");
+    if (!isCodephrase(secret)) {
+      setErrorText("Vui lòng nhập Codephrase hợp lệ (tối thiểu 6 ký tự, chỉ chứa chữ cái, số, gạch ngang).");
       return;
     }
 
@@ -143,13 +144,12 @@ export function ReceiveView({
       }
 
       try {
-        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const gatewayURL = `${wsProto}//${window.location.host}/ws`;
+        const bridgeURL = deriveBridgeURL(window.location.protocol, window.location.host, "/ws");
 
         const offer = await receiveFiles({
           secret,
           settings: {
-            gatewayURL,
+            bridgeURL,
             relayAddresses: bridgeConfig.relayAddresses,
             relayPassword: bridgeConfig.relayPassword,
             storeAPI: "",

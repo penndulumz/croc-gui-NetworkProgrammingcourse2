@@ -14,14 +14,14 @@ export interface LocalDualRelayStats {
     activeRooms: number;
     activeConnections: number;
     bytesRelayed: number;
-    packetsRelayed: number;
+    chunksRelayed: number;
   };
   beta: {
     online: boolean;
     activeRooms: number;
     activeConnections: number;
     bytesRelayed: number;
-    packetsRelayed: number;
+    chunksRelayed: number;
   };
 }
 
@@ -33,15 +33,15 @@ export function isValidRoomId(value: string | null): value is string {
   return Boolean(value && /^[a-zA-Z0-9_-]{4,128}$/.test(value));
 }
 
-export class LocalDualRelayHub {
+export class LocalDualRelayNode {
   private channels: Record<LocalRelayChannel, Map<string, Set<RoomPeer>>> = {
     alpha: new Map(),
     beta: new Map(),
   };
 
-  private metrics: Record<LocalRelayChannel, { bytes: number; packets: number }> = {
-    alpha: { bytes: 0, packets: 0 },
-    beta: { bytes: 0, packets: 0 },
+  private metrics: Record<LocalRelayChannel, { bytes: number; chunks: number }> = {
+    alpha: { bytes: 0, chunks: 0 },
+    beta: { bytes: 0, chunks: 0 },
   };
 
   private peerSeq = 0;
@@ -97,7 +97,7 @@ export class LocalDualRelayHub {
         if (other.socket.readyState === other.socket.OPEN) {
           other.socket.send(data, { binary: isBinary });
           this.metrics[channel].bytes += byteLength;
-          this.metrics[channel].packets += 1;
+          this.metrics[channel].chunks += 1;
         }
       }
     });
@@ -148,15 +148,18 @@ export class LocalDualRelayHub {
         activeRooms: this.channels.alpha.size,
         activeConnections: countConns(this.channels.alpha),
         bytesRelayed: this.metrics.alpha.bytes,
-        packetsRelayed: this.metrics.alpha.packets,
+        chunksRelayed: this.metrics.alpha.chunks,
       },
       beta: {
         online: true,
         activeRooms: this.channels.beta.size,
         activeConnections: countConns(this.channels.beta),
         bytesRelayed: this.metrics.beta.bytes,
-        packetsRelayed: this.metrics.beta.packets,
+        chunksRelayed: this.metrics.beta.chunks,
       },
     };
   }
 }
+
+// Deprecated alias for backwards compatibility
+export { LocalDualRelayNode as LocalDualRelayHub };

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { createCrocFlowServer } from "../server.ts";
+import { LocalDualRelayNode } from "./local-dual-relay.ts";
 
 test("Unified server serves /healthz, /config.js, /api/relays/status, and rejects disallowed /ws targets", async () => {
   const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
@@ -17,17 +18,25 @@ test("Unified server serves /healthz, /config.js, /api/relays/status, and reject
     assert.equal(configJs.status, 200);
     const configBody = await configJs.text();
     assert.match(configBody, /window\.__CROC_RUNTIME_CONFIG__/);
+    assert.match(configBody, /"bridgeURL":"\/ws"/);
     assert.match(configBody, /1\.getcroc\.com:9009/);
+
+    assert.ok(server.dualRelayNode instanceof LocalDualRelayNode);
 
     const relayStatus = await fetch(`${baseUrl}/api/relays/status`);
     assert.equal(relayStatus.status, 200);
     const statusJson = (await relayStatus.json()) as {
       publicRelays: Array<{ host: string }>;
-      localDualRelay: { alpha: { online: boolean }; beta: { online: boolean } };
+      localDualRelay: {
+        alpha: { online: boolean; chunksRelayed: number };
+        beta: { online: boolean; chunksRelayed: number };
+      };
     };
     assert.equal(statusJson.publicRelays.length, 4);
     assert.equal(statusJson.localDualRelay.alpha.online, true);
     assert.equal(statusJson.localDualRelay.beta.online, true);
+    assert.equal(typeof statusJson.localDualRelay.alpha.chunksRelayed, "number");
+    assert.equal(typeof statusJson.localDualRelay.beta.chunksRelayed, "number");
 
     // Disallowed port must be rejected with 403 on WebSocket upgrade
     const rejectedStatus = await new Promise<number>((resolve, reject) => {

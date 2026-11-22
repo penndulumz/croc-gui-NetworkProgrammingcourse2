@@ -1,4 +1,4 @@
-# 0003: Unified Node.js Bridge Server with Allowlisted Public Relay Proxy and Embedded Local Dual-Relay Lab
+# 0003: Unified Node.js Bridge Server with Allowlisted Public Relay Bridge and Embedded Local Dual-Relay Lab
 
 Status: accepted
 

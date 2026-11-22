@@ -9,12 +9,12 @@ const MAX_RAW_BUFFER = 4 * 1024 * 1024;
 
 type SocketMode = "framed" | "handoff" | "raw";
 
-export function gatewayForPort(gateway: string, relayIndex: number, port: string) {
-  const base = new URL(gateway || "/ws", window.location.href);
+export function bridgeForPort(bridge: string, relayIndex: number, port: string) {
+  const base = new URL(bridge || "/ws", window.location.href);
   if (base.protocol === "http:") base.protocol = "ws:";
   if (base.protocol === "https:") base.protocol = "wss:";
   if (base.protocol !== "ws:" && base.protocol !== "wss:") {
-    throw new Error("Gateway URL must use ws:// or wss://");
+    throw new Error("Bridge URL must use ws:// or wss://");
   }
   if (!Number.isSafeInteger(relayIndex) || relayIndex < 0) {
     throw new Error("Relay index must be a non-negative integer");
@@ -23,6 +23,8 @@ export function gatewayForPort(gateway: string, relayIndex: number, port: string
   base.searchParams.set("port", port);
   return base.toString();
 }
+
+export const gatewayForPort = bridgeForPort;
 
 export class CrocSocket {
   private socket: WebSocket;
@@ -81,7 +83,7 @@ export class CrocSocket {
   }
 
   static connect(
-    gateway: string,
+    bridge: string,
     relayIndex: number,
     port: string,
     signal?: AbortSignal,
@@ -91,7 +93,7 @@ export class CrocSocket {
         reject(new DOMException("Transfer cancelled", "AbortError"));
         return;
       }
-      const socket = new WebSocket(gatewayForPort(gateway, relayIndex, port));
+      const socket = new WebSocket(bridgeForPort(bridge, relayIndex, port));
       const crocSocket = new CrocSocket(socket, signal);
       const onOpen = () => {
         cleanup();
@@ -100,7 +102,7 @@ export class CrocSocket {
       const onError = () => {
         cleanup();
         crocSocket.close();
-        reject(new Error("Could not connect to the croc WebSocket gateway"));
+        reject(new Error("Could not connect to the croc WebSocket bridge"));
       };
       const onAbort = () => {
         cleanup();

@@ -13,7 +13,7 @@ export interface LocalRelayChannelMetrics {
   activeRooms: number;
   activeConnections: number;
   bytesRelayed: number;
-  packetsRelayed: number;
+  chunksRelayed: number;
 }
 
 export interface BridgeStatusResponse {
@@ -30,6 +30,25 @@ export type RelayClusterStatus = BridgeStatusResponse;
 export interface BridgePublicConfig {
   relayAddresses: string[];
   relayPassword: string;
+}
+
+/**
+ * Derives the WebSocket bridge URL given a protocol, host, and optional path.
+ * Normalizes http(s): and ws(s): schemes and ensures a clean URL.
+ */
+export function deriveBridgeURL(
+  protocol: string,
+  host: string,
+  path = "/ws",
+): string {
+  const isSecure =
+    protocol.startsWith("https") ||
+    protocol.startsWith("wss") ||
+    protocol === "wss:";
+  const wsProto = isSecure ? "wss:" : "ws:";
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const cleanHost = host.replace(/\/+$/, "");
+  return `${wsProto}//${cleanHost}${cleanPath}`;
 }
 
 export function extractBridgePublicConfig(status: BridgeStatusResponse | null): BridgePublicConfig | null {

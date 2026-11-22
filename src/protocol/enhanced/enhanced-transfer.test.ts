@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import WebSocket from "ws";
 import { createCrocFlowServer } from "../../../server";
+import { LocalDualRelayNode } from "../../../server/local-dual-relay";
 import {
   receiveEnhancedTransfer,
   sendEnhancedTransfer,
@@ -64,6 +65,7 @@ const nodeWsFactory = (url: string): WebSocketLike =>
 
 test("Enhanced Dual-Relay transfer encrypts E2E, splits even/odd chunks, and survives live Alpha failover", async () => {
   const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  assert.ok(server.dualRelayNode instanceof LocalDualRelayNode);
   const { port } = await server.listen(0, "127.0.0.1");
   const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
 
@@ -118,6 +120,7 @@ test("Enhanced Dual-Relay transfer encrypts E2E, splits even/odd chunks, and sur
 
 test("Enhanced Folder Manifest Resume skips cached chunks after disconnect and transfers newly added files", async () => {
   const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  assert.ok(server.dualRelayNode instanceof LocalDualRelayNode);
   const { port } = await server.listen(0, "127.0.0.1");
   const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
 

@@ -100,7 +100,7 @@ export interface PreparedFile {
 }
 
 export interface TransferSettings {
-  gatewayURL: string;
+  bridgeURL: string;
   relayAddresses: string[];
   relayPassword: string;
   storeAPI: string;

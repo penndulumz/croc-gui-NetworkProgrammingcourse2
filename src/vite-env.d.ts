@@ -2,6 +2,7 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 interface CrocRuntimeConfig {
+  bridgeURL?: string;
   gatewayURL?: string;
   localDualRelayURL?: string;
   relayAddresses?: string[];

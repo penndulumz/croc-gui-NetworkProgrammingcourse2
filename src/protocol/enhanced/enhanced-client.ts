@@ -731,8 +731,8 @@ export async function sendEnhancedTransfer(options: {
         if (controller.signal.aborted) {
           throw new DOMException("Phiên truyền đã bị hủy", "AbortError");
         }
-        const job = scheduler!.nextForLane(lane);
-        if (!job) {
+        const scheduledChunk = scheduler!.nextForLane(lane);
+        if (!scheduledChunk) {
           // Wait briefly if other lane is still active or might failover
           if (lane === "beta" && alphaAlive && !scheduler!.isComplete()) {
             await new Promise((r) => setTimeout(r, 15));
@@ -741,7 +741,7 @@ export async function sendEnhancedTransfer(options: {
           break;
         }
 
-        const desc = chunkLookup.get(job.globalIndex)!;
+        const desc = chunkLookup.get(scheduledChunk.globalIndex)!;
         const fileInput = files[desc.fileIndex];
         const rawSlice = fileInput.bytes.subarray(desc.offset, desc.offset + desc.size);
         const conn = lane === "alpha" ? alphaConn : betaConn;
@@ -757,7 +757,7 @@ export async function sendEnhancedTransfer(options: {
         if (emitInspector) {
           protocolEventBus.updateChunkState(
             desc.globalIndex,
-            job.rerouted ? "failover" : lane,
+            scheduledChunk.rerouted ? "failover" : lane,
             lane,
           );
         }
@@ -766,7 +766,7 @@ export async function sendEnhancedTransfer(options: {
           kind: "chunk",
           globalIndex: desc.globalIndex,
           lane,
-          rerouted: job.rerouted,
+          rerouted: scheduledChunk.rerouted,
           dataB64: bytesToBase64(rawSlice),
         });
 
@@ -794,7 +794,7 @@ export async function sendEnhancedTransfer(options: {
         if (emitInspector) {
           protocolEventBus.updateChunkState(
             desc.globalIndex,
-            job.rerouted ? "failover" : "verified",
+            scheduledChunk.rerouted ? "failover" : "verified",
           );
         }
         reportProgress();

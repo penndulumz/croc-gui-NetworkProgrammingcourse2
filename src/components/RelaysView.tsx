@@ -273,9 +273,9 @@ export function RelaysView({
               </div>
               <div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {relayStatus.localDualRelay.alpha.packetsRelayed}
+                  {relayStatus.localDualRelay.alpha.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500">Gói tin (Frames)</div>
+                <div className="text-[11px] text-slate-500">Chunks (Đã chuyển)</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -302,9 +302,9 @@ export function RelaysView({
               </div>
               <div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {relayStatus.localDualRelay.beta.packetsRelayed}
+                  {relayStatus.localDualRelay.beta.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500">Gói tin (Frames)</div>
+                <div className="text-[11px] text-slate-500">Chunks (Đã chuyển)</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-slate-900 dark:text-slate-100">

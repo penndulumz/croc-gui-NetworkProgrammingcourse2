@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { createCrocFlowServer } from "../server.ts";
+import { LocalDualRelayNode } from "./local-dual-relay.ts";
 
 function openWs(url: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
@@ -97,7 +98,22 @@ test("Local Dual-Relay Lab pairs sender and receiver across Alpha and Beta, isol
     senderBeta.close();
     receiverBeta.close();
     isolatedPeer.close();
+
+    // 4. Verify LocalDualRelayNode stats reflect chunks relayed
+    assert.ok(server.dualRelayNode instanceof LocalDualRelayNode);
+    const stats = server.dualRelayNode.getStats();
+    assert.ok(stats.alpha.chunksRelayed >= 1, "Expected Alpha chunksRelayed >= 1");
+    assert.ok(stats.beta.chunksRelayed >= 2, "Expected Beta chunksRelayed >= 2");
   } finally {
     await server.close();
   }
+});
+
+test("LocalDualRelayNode initializes with zeroed chunksRelayed and tracks channels cleanly", () => {
+  const node = new LocalDualRelayNode();
+  const stats = node.getStats();
+  assert.equal(stats.alpha.chunksRelayed, 0);
+  assert.equal(stats.beta.chunksRelayed, 0);
+  assert.equal(stats.alpha.online, true);
+  assert.equal(stats.beta.online, true);
 });

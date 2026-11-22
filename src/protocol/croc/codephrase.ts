@@ -6,6 +6,26 @@ if (effWords.length !== 1296) {
   throw new Error(`EFF word list has ${effWords.length} entries; want 1296`);
 }
 
+declare const CodephraseBrand: unique symbol;
+export type Codephrase = string & { readonly [CodephraseBrand]: true };
+
+export function isCodephrase(value: unknown): value is Codephrase {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed.length < 6) return false;
+  return /^[a-zA-Z0-9_-]+$/.test(trimmed);
+}
+
+export function asCodephrase(value: string): Codephrase {
+  const trimmed = value.trim();
+  if (!isCodephrase(trimmed)) {
+    throw new Error(
+      `Invalid codephrase: "${value}". Must be at least 6 characters and contain only letters, numbers, hyphens, and underscores.`,
+    );
+  }
+  return trimmed as Codephrase;
+}
+
 export function secureRandomIndex(upperBound: number) {
   if (!Number.isSafeInteger(upperBound) || upperBound < 1) {
     throw new RangeError("upperBound must be a positive safe integer");
@@ -22,11 +42,11 @@ export function secureRandomIndex(upperBound: number) {
 
 export function generateCode(
   selectIndex: (upperBound: number) => number = secureRandomIndex,
-) {
+): Codephrase {
   return Array.from(
     { length: 3 },
     () => effWords[selectIndex(effWords.length)],
-  ).join("-");
+  ).join("-") as Codephrase;
 }
 
 const effWordSet = new Set(effWords);
@@ -58,7 +78,7 @@ async function digestHex(bytes: Uint8Array) {
   );
 }
 
-export async function codeComponents(secret: string) {
+export async function codeComponents(secret: string | Codephrase) {
   const encoder = new TextEncoder();
   const bytes = encoder.encode(secret);
   if (bytes.length < 6) {
@@ -89,12 +109,12 @@ export async function codeComponents(secret: string) {
   return { room: await digestHex(roomBytes), passphrase, format };
 }
 
-export async function sshCodeComponents(secret: string) {
+export async function sshCodeComponents(secret: string | Codephrase) {
   const { room, passphrase } = await codeComponents(secret);
   return { room, passphrase };
 }
 
-export async function relayIndex(secret: string, count: number) {
+export async function relayIndex(secret: string | Codephrase, count: number) {
   if (!Number.isSafeInteger(count) || count <= 0) {
     throw new Error("relay count must be positive");
   }

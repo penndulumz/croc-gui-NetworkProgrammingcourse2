@@ -63,7 +63,7 @@ export async function connectRelay(
   let pakeHandle: number | undefined;
   try {
     socket = await CrocSocket.connect(
-      settings.gatewayURL,
+      settings.bridgeURL,
       relayIndex,
       port,
       signal,
@@ -125,7 +125,7 @@ export async function measureRelayLatency(
   try {
     const address = relayAddress(settings, relayIndex);
     socket = await CrocSocket.connect(
-      settings.gatewayURL,
+      settings.bridgeURL,
       relayIndex,
       controlPort(address),
       controller.signal,
