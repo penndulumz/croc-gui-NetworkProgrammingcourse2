@@ -51,6 +51,7 @@ import {
 } from "../lib/relay-manager";
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
+import { ModeSelector } from "./ModeSelector";
 
 export interface SendViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -484,81 +485,18 @@ export function SendView({
         </div>
       </div>
 
-      {/* Mode Switcher */}
-      <div
-        role="tablist"
-        aria-label="Send protocol mode"
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "standard"}
-          disabled={busy}
-          onClick={() => {
-            setMode("standard");
+      {/* Compact Segmented Mode Selector with Info Modal */}
+      <ModeSelector
+        mode={mode}
+        onChangeMode={(newMode) => {
+          setMode(newMode);
+          if (newMode === "standard") {
             void autoGenerateCode("standard");
-          }}
-          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-            mode === "standard"
-              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
-          }`}
-        >
-          <ShieldCheck
-            className={`mt-0.5 h-5 w-5 shrink-0 ${
-              mode === "standard"
-                ? "text-teal-600 dark:text-teal-400"
-                : "text-slate-400 dark:text-slate-500"
-            }`}
-            aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              <span>{t.send.modeStandardTitle}</span>
-              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
-                CLI
-              </span>
-            </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              {t.send.modeStandardDesc}
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "enhanced"}
-          disabled={busy}
-          onClick={() => setMode("enhanced")}
-          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-            mode === "enhanced"
-              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
-          }`}
-        >
-          <Layers
-            className={`mt-0.5 h-5 w-5 shrink-0 ${
-              mode === "enhanced"
-                ? "text-teal-600 dark:text-teal-400"
-                : "text-slate-400 dark:text-slate-500"
-            }`}
-            aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              <span>{t.send.modeEnhancedTitle}</span>
-              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
-                Dual-Relay
-              </span>
-            </div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              {t.send.modeEnhancedDesc}
-            </div>
-          </div>
-        </button>
-      </div>
+          }
+        }}
+        disabled={busy}
+        locale={locale}
+      />
 
       {/* Main Transfer Card */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

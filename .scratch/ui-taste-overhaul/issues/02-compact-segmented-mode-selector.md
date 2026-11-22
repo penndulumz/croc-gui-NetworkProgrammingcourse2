@@ -4,8 +4,8 @@
 
 **Blocked by:** 01: Button Text Economy & Concise i18n Dictionary
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Mode selector uses a compact segmented pill control taking up minimal vertical height
-- [ ] An info button triggers an accessible modal/popover comparing Standard CLI and Turbo Dual-Relay modes
-- [ ] Mode switching seamlessly toggles between single-relay and dual-relay transfer logic without breaking state
+- [x] Mode selector uses a compact segmented pill control taking up minimal vertical height
+- [x] An info button triggers an accessible modal/popover comparing Standard CLI and Turbo Dual-Relay modes
+- [x] Mode switching seamlessly toggles between single-relay and dual-relay transfer logic without breaking state
