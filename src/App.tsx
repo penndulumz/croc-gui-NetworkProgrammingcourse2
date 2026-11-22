@@ -231,7 +231,11 @@ export const App: React.FC = () => {
           onUseCodeForReceive={handleUseCodeForReceive}
         />
       ) : (
-        <AppDocsHubView history={history} deviceAlias={deviceAlias} />
+        <AppDocsHubView
+          history={history}
+          deviceAlias={deviceAlias}
+          onHistoryUpdated={handleRefreshHistory}
+        />
       )}
 
       <OfflineIndicator />

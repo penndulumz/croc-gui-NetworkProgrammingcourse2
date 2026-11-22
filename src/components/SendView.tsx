@@ -6,7 +6,6 @@ import {
   FileText,
   FolderUp,
   Layers,
-  Play,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -22,8 +21,6 @@ import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
 import { maxTextTransferBytes, type FileProgress as CrocFileProgress } from "../protocol/croc/types";
 import {
   filesToManifestInputs,
-  runLoopbackDualRelayFailoverDemo,
-  runLoopbackFolderResumeDemo,
   sendEnhancedTransfer,
   type EnhancedControlHandle,
   type EnhancedProgress,
@@ -322,7 +319,7 @@ export function SendView({
 
     // Enhanced Mode: Folder Manifest + SHA-256 + Dual-Relay
     if (selectedFiles.length === 0) {
-      setErrorText("Hãy chọn ít nhất 1 tệp hoặc 1 thư mục (hoặc bấm nút Demo 2 Relay ngay bên dưới).");
+      setErrorText("Hãy chọn ít nhất 1 tệp hoặc 1 thư mục cần gửi.");
       return;
     }
 
@@ -391,100 +388,6 @@ export function SendView({
       setBusy(false);
       abortRef.current = null;
       enhancedHandleRef.current = null;
-    }
-  };
-
-  const handleRunDualRelayDemo = async () => {
-    setErrorText(null);
-    setSuccessText(null);
-    setEnhProgress(null);
-    setMode("enhanced");
-    setDualRelay(true);
-    setBusy(true);
-
-    const demoCode = codephrase.trim() || "4281-dual-relay-lab";
-    try {
-      const res = await runLoopbackDualRelayFailoverDemo({
-        codephrase: demoCode,
-        onStatus: setStatusText,
-        onProgress: (p) => {
-          setEnhProgress(p);
-          if (metricsTrackerRef.current) {
-            setMetrics(metricsTrackerRef.current.update(p.bytesTransferred, p.totalBytes));
-          }
-        },
-        onHandleReady: (h) => {
-          enhancedHandleRef.current = h;
-        },
-      });
-      appendTransferHistory({
-        direction: "send",
-        mode: "enhanced",
-        dualRelay: true,
-        codephrase: demoCode,
-        fileCount: res.manifest.totalFiles,
-        summaryName: "BaoCao_MangMayTinh/ (Demo 2 Relay + Failover)",
-        totalBytes: res.manifest.totalBytes,
-        status: "completed",
-        verifiedHash: "SHA-256",
-        failoverTriggered: res.failoverRerouted > 0,
-        deviceAlias,
-      });
-      onHistoryUpdated();
-      setSuccessText(
-        `Demo 2 Relay + Failover hoàn tất qua WebSocket thật! Alpha: ${res.alphaDelivered} chunk chẵn · Beta: ${res.betaDelivered} chunk (gồm ${res.failoverRerouted} chunk Failover sau khi ngắt Alpha). Toàn bộ SHA-256 khớp 100%.`,
-      );
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-      enhancedHandleRef.current = null;
-    }
-  };
-
-  const handleRunResumeDemo = async () => {
-    setErrorText(null);
-    setSuccessText(null);
-    setEnhProgress(null);
-    metricsTrackerRef.current = new RollingMetricsTracker();
-    setMetrics({ speedBps: 0, etaSeconds: null, isStalled: false });
-    setMode("enhanced");
-    setDualRelay(true);
-    setBusy(true);
-
-    const demoCode = `resume-${Date.now().toString(36)}`;
-    try {
-      const res = await runLoopbackFolderResumeDemo({
-        codephrase: demoCode,
-        onStatus: setStatusText,
-        onProgress: (p) => {
-          setEnhProgress(p);
-          if (metricsTrackerRef.current) {
-            setMetrics(metricsTrackerRef.current.update(p.bytesTransferred, p.totalBytes));
-          }
-        },
-      });
-      appendTransferHistory({
-        direction: "send",
-        mode: "enhanced",
-        dualRelay: true,
-        codephrase: demoCode,
-        fileCount: res.stage2Result.manifest.totalFiles,
-        summaryName: "BaoCao_MangMayTinh/ (Demo Resume + Tệp mới)",
-        totalBytes: res.stage2Result.manifest.totalBytes,
-        status: "resumed",
-        verifiedHash: "SHA-256",
-        resumedChunks: res.stage2Result.resumedChunks,
-        deviceAlias,
-      });
-      onHistoryUpdated();
-      setSuccessText(
-        `Demo Resume hoàn tất! Bỏ qua ${res.stage2Result.resumedChunks} chunk đã lưu trong IndexedDB, tự động phát hiện & tải thêm tệp mới '${res.newFileDetected}' với SHA-256 khớp 100%.`,
-      );
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -1155,41 +1058,6 @@ export function SendView({
             )}
           </div>
         )}
-      </section>
-
-      {/* Live 1-Click Academic Lab Scenarios (Real WebSocket Dual-Relay & Resume) */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-start gap-2.5">
-          <Zap className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-          <div>
-            <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
-              Kịch bản kiểm thử trực tiếp trên 1 máy (WebSocket thật qua /ws-dual)
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              Dành cho buổi trình diễn với giảng viên hoặc tự kiểm tra ngay trên 1 thiết bị: hệ thống khởi chạy cả máy Gửi và máy Nhận thật qua hai phòng Relay Alpha & Beta cục bộ, mã hóa AES-256-GCM và ghi nhận trực tiếp lên Bảng soi giao thức.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2.5">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void handleRunDualRelayDemo()}
-            className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-teal-600/40 bg-teal-600/10 px-4 py-2 text-xs font-semibold text-teal-900 hover:bg-teal-600/15 disabled:opacity-50 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-200"
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            Chạy Demo 2 Relay + Failover trực tiếp
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void handleRunResumeDemo()}
-            className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            Demo Đứt mạng & Thêm tệp Resume (IndexedDB)
-          </button>
-        </div>
       </section>
     </div>
   );
