@@ -4,8 +4,8 @@
 
 **Blocked by:** 02: Compact Segmented Mode Selector with Info Popover
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Drag-and-drop canvas accepts files and whole folders with responsive visual feedback on hover/drag
-- [ ] Selected files display as sleek removable chips with individual and total size badges
-- [ ] Codephrase, copy button, QR sheet trigger, and saved peer selector fit cleanly into a single unified bar
+- [x] Drag-and-drop canvas accepts files and whole folders with responsive visual feedback on hover/drag
+- [x] Selected files display as sleek removable chips with individual and total size badges
+- [x] Codephrase, copy button, QR sheet trigger, and saved peer selector fit cleanly into a single unified bar

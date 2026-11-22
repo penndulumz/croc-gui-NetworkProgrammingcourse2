@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Zap,
   Smartphone,
+  QrCode,
 } from "lucide-react";
 import { asCodephrase, generateCode, generateOptimizedCodephrase, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
 import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
@@ -109,6 +110,8 @@ export function SendView({
   const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
   const [metrics, setMetrics] = useRollingMetrics(metricsTrackerRef, busy);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const enhancedHandleRef = useRef<EnhancedControlHandle | null>(null);
@@ -674,64 +677,86 @@ export function SendView({
               }}
             />
 
+            {/* Unified Drag-and-Drop Canvas */}
             <div
-              onDragOver={(e) => e.preventDefault()}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
               onDrop={(e) => {
                 e.preventDefault();
+                setIsDragging(false);
                 if (!busy && e.dataTransfer.files) addFiles(e.dataTransfer.files);
               }}
-              className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/80 px-5 py-7 text-center transition-colors hover:border-teal-500/70 dark:border-slate-700 dark:bg-slate-950/40"
+              className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
+                isDragging
+                  ? "border-emerald-500 bg-emerald-500/10 scale-[1.005]"
+                  : "border-zinc-300 bg-zinc-50/50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950/40 dark:hover:border-zinc-600"
+              }`}
             >
-              <Upload className="h-7 w-7 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-              <p className="mt-2.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Kéo thả tệp vào đây hoặc chọn từ máy
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                <Upload className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                {locale === "vi" ? "Kéo thả tệp hoặc thư mục vào đây" : "Drop files or folders here"}
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {mode === "enhanced"
-                  ? "Hỗ trợ chọn nguyên thư mục con, lập Folder Manifest và băm SHA-256 từng Chunk."
-                  : "Tệp được mã hóa AES-256-GCM trực tiếp trên trình duyệt trước khi rời máy."}
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {locale === "vi" ? "hoặc duyệt từ thiết bị của bạn" : "or browse from your device"}
               </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2.5">
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex min-h-[42px] items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
                 >
-                  <Upload className="h-4 w-4" aria-hidden="true" />
-                  Chọn tệp tin
+                  <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t.send.browseFiles}
                 </button>
                 {mode === "enhanced" && (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => folderInputRef.current?.click()}
-                    className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
-                    <FolderUp className="h-4 w-4" aria-hidden="true" />
-                    Chọn cả thư mục
+                    <FolderUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t.send.browseFolders}
                   </button>
                 )}
               </div>
             </div>
 
             {selectedFiles.length > 0 && (
-              <div className="mt-4">
-                <div className="mb-2 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-                  <span className="font-medium">
-                    Đã chọn {selectedFiles.length} tệp · Tổng {formatBytes(totalSelectedBytes)}
-                  </span>
+              <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-950/60">
+                <div className="mb-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {selectedFiles.length} {locale === "vi" ? "tệp đã chọn" : "files selected"}
+                    </span>
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                      {formatBytes(totalSelectedBytes)}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => setSelectedFiles([])}
-                    className="inline-flex items-center gap-1 text-rose-600 hover:underline dark:text-rose-400"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline dark:text-rose-400"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Xóa danh sách
+                    {t.send.clearFiles}
                   </button>
                 </div>
-                <ul className="max-h-40 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                <ul className="max-h-48 divide-y divide-zinc-100 overflow-y-auto rounded-lg border border-zinc-100 dark:divide-zinc-800/80 dark:border-zinc-800">
                   {selectedFiles.map((file, idx) => {
                     const rel =
                       (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
@@ -739,13 +764,13 @@ export function SendView({
                     return (
                       <li
                         key={`${rel}-${idx}`}
-                        className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
+                        className="flex items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50"
                       >
-                        <span className="truncate font-mono text-slate-800 dark:text-slate-200">
+                        <span className="truncate font-mono text-zinc-800 dark:text-zinc-200">
                           {rel}
                         </span>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="font-mono tabular-nums text-slate-500">
+                          <span className="font-mono tabular-nums text-zinc-500">
                             {formatBytes(file.size)}
                           </span>
                           <button
@@ -753,7 +778,7 @@ export function SendView({
                             disabled={busy}
                             onClick={() => removeFile(idx)}
                             aria-label={`Bỏ tệp ${rel}`}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                           >
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
@@ -767,120 +792,26 @@ export function SendView({
           </div>
         )}
 
-        {/* Frequent Peer Preset Quick-Select */}
-        <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                Người nhận / Thiết bị đích (Recipient Peer)
-              </span>
-            </div>
-            {activePeer && (
-              <button
-                type="button"
-                onClick={() => handleSelectPeerPreset(null)}
-                className="inline-flex items-center gap-1 text-xs text-rose-600 hover:underline dark:text-rose-400"
-              >
-                <X className="h-3 w-3" aria-hidden="true" />
-                Bỏ chọn ({activePeer.alias})
-              </button>
-            )}
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <select
-              value={activePeer?.id ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                const found = peerPresets.find((p) => p.id === val);
-                handleSelectPeerPreset(found ?? null);
-              }}
-              className="min-h-[36px] rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-              aria-label="Chọn thiết bị nhận thường gặp"
-            >
-              <option value="">-- Chọn thiết bị thường gặp --</option>
-              {peerPresets.map((peer) => {
-                const isPeerLocal =
-                  peer.preferredRelayProfile === "local-dual" ||
-                  peer.preferredRelayProfile === "local-lab";
-                return (
-                  <option key={peer.id} value={peer.id}>
-                    {peer.alias} {isPeerLocal ? "(⚡ Local Lab)" : ""}
-                    {peer.notes ? ` · ${peer.notes}` : ""}
-                  </option>
-                );
-              })}
-            </select>
-
-            {/* Quick Chips for Top Frequent Peers */}
-            {peerPresets.slice(0, 4).map((peer) => {
-              const isSelected = activePeer?.id === peer.id;
-              return (
-                <button
-                  key={peer.id}
-                  type="button"
-                  onClick={() => handleSelectPeerPreset(isSelected ? null : peer)}
-                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    isSelected
-                      ? "border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-400 dark:bg-teal-950/80 dark:text-teal-200"
-                      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                  }`}
+        {/* Streamlined Transfer Target Bar */}
+        <div className="mt-5 rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+          <div className="flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between">
+            {/* Left: Codephrase display & actions */}
+            <div className="flex-1">
+              <div className="mb-1.5 flex items-center justify-between">
+                <label
+                  htmlFor="send-codephrase-input"
+                  className="text-xs font-semibold text-zinc-600 dark:text-zinc-400"
                 >
-                  <Smartphone className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                  <span>{peer.alias}</span>
-                  {(peer.preferredRelayProfile === "local-dual" ||
-                    peer.preferredRelayProfile === "local-lab") && (
-                    <span className="rounded bg-teal-200/60 px-1 text-[10px] font-semibold text-teal-900 dark:bg-teal-900 dark:text-teal-200">
-                      ⚡ Lab
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-            {peerPresets.length === 0 && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Chưa có thiết bị thường gặp nào được lưu. Bạn có thể lưu thiết bị trong thẻ Lịch sử.
-              </span>
-            )}
-          </div>
-
-          {activePeer && (
-            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50/60 p-2.5 text-xs text-teal-900 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-200">
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                <span>
-                  Đã nhắm người nhận: <strong>{activePeer.alias}</strong>
-                  {activePeer.notes ? ` (${activePeer.notes})` : ""}
-                </span>
+                  {t.send.secretPhrase}
+                </label>
+                {optimizedRelay && (
+                  <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                    <Zap className="h-3 w-3" />
+                    Relay #{optimizedRelay.index + 1} ({optimizedRelay.host}, {optimizedRelay.rttMs}ms)
+                  </span>
+                )}
               </div>
-              {activePeer.preferredRelayProfile && (
-                <span className="text-[11px] text-teal-700 dark:text-teal-300">
-                  Hồ sơ relay ưu tiên:{" "}
-                  <strong>
-                    {activePeer.preferredRelayProfile === "local-dual" ||
-                    activePeer.preferredRelayProfile === "local-lab"
-                      ? "Local Dual-Relay Lab"
-                      : "Public Croc Relays"}
-                  </strong>
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Codephrase + QR Share Row */}
-        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-[1fr_auto] dark:border-slate-800">
-          <div className="space-y-3">
-            <div>
-              <label
-                htmlFor="send-codephrase-input"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-              >
-                Mã bí mật (Codephrase)
-              </label>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="relative flex items-center">
                 <input
                   id="send-codephrase-input"
                   type="text"
@@ -890,75 +821,131 @@ export function SendView({
                     setCodephrase(e.target.value);
                     setOptimizedRelay(null);
                   }}
-                  className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-sm font-semibold text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  className="h-10 w-full rounded-xl border border-zinc-300 bg-white pl-3.5 pr-20 font-mono text-sm font-semibold text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400"
                 />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void regenerateCode()}
-                  aria-label="Tạo Codephrase mới"
-                  className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                >
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                </button>
+                <div className="absolute right-1.5 flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void regenerateCode()}
+                    title={t.send.regeneratePhrase}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyText("code", codephrase.trim())}
+                    title={t.common.copy}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  >
+                    {copiedItem === "code" ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
               </div>
-              {optimizedRelay && (
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/50 dark:text-amber-300">
-                    <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                    ⚡ Tối ưu cho Relay #{optimizedRelay.index + 1} ({optimizedRelay.host}, {optimizedRelay.rttMs} ms)
-                  </span>
+            </div>
+
+            {/* Right: Peer Selector & QR Modal Trigger */}
+            <div className="flex flex-wrap items-center gap-2 lg:self-end">
+              {peerPresets.length > 0 && (
+                <div className="relative flex items-center">
+                  <select
+                    value={activePeer?.id ?? ""}
+                    onChange={(e) => {
+                      const found = peerPresets.find((p) => p.id === e.target.value);
+                      handleSelectPeerPreset(found ?? null);
+                    }}
+                    className="h-10 rounded-xl border border-zinc-300 bg-white pl-3 pr-8 text-xs font-semibold text-zinc-700 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  >
+                    <option value="">{locale === "vi" ? "Gửi tới bạn bè..." : "Send to peer..."}</option>
+                    {peerPresets.map((peer) => (
+                      <option key={peer.id} value={peer.id}>
+                        {peer.alias}
+                      </option>
+                    ))}
+                  </select>
+                  {activePeer && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPeerPreset(null)}
+                      title="Clear peer"
+                      className="ml-1 text-xs text-rose-500 hover:underline"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
-            </div>
 
-            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void copyText("code", codephrase.trim())}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                onClick={() => setShowQRModal(true)}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-zinc-300 bg-white px-3.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
-                {copiedItem === "code" ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                Sao chép mã
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyText("cli", cliCommand)}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                {copiedItem === "cli" ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {cliCommand}
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyText("link", shareUrl)}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                {copiedItem === "link" ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                Sao chép liên kết nhận
+                <QrCode className="h-4 w-4" aria-hidden="true" />
+                <span>QR</span>
               </button>
             </div>
-          </div>
-
-          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700">
-            <QRCodeSVG value={shareUrl || codephrase} size={92} level="M" />
-            <span className="mt-1.5 text-[11px] font-medium text-slate-600">
-              Quét bằng Android
-            </span>
           </div>
         </div>
+
+        {/* QR & Share Modal */}
+        {showQRModal && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setShowQRModal(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  {t.send.qrTitle}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowQRModal(false)}
+                  className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 flex justify-center p-3 rounded-xl bg-white border border-zinc-200 dark:border-zinc-700">
+                <QRCodeSVG value={shareUrl || codephrase} size={160} level="M" />
+              </div>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                {t.send.qrHint}
+              </p>
+
+              <div className="mt-4 space-y-2 text-left">
+                <button
+                  type="button"
+                  onClick={() => void copyText("cli", cliCommand)}
+                  className="w-full flex items-center justify-between rounded-xl border border-zinc-200 p-2.5 font-mono text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <span className="truncate">{cliCommand}</span>
+                  {copiedItem === "cli" ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyText("link", shareUrl)}
+                  className="w-full flex items-center justify-between rounded-xl border border-zinc-200 p-2.5 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <span className="truncate">{locale === "vi" ? "Sao chép liên kết" : "Copy Web Link"}</span>
+                  {copiedItem === "link" ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Primary Action Bar */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
