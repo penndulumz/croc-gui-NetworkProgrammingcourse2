@@ -4,10 +4,10 @@
 
 **Blocked by:** 01: Domain Vocabulary Normalization, Branded Codephrase & Bridge Client Unification
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Pure client-side zip creation utility implemented with deflate compression.
-- [ ] Received folder files packaged into a downloadable `.zip` file preserving nested relative paths.
-- [ ] Directory save option provided via File System Access API where available.
-- [ ] Path sanitization strictly rejects `..` segments and leading slashes before packaging or saving.
-- [ ] Unit tests verify zip generation, directory hierarchy preservation, and traversal rejection.
+- [x] Pure client-side zip creation utility implemented with deflate compression.
+- [x] Received folder files packaged into a downloadable `.zip` file preserving nested relative paths.
+- [x] Directory save option provided via File System Access API where available.
+- [x] Path sanitization strictly rejects `..` segments and leading slashes before packaging or saving.
+- [x] Unit tests verify zip generation, directory hierarchy preservation, and traversal rejection.

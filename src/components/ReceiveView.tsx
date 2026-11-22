@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  Archive,
   Check,
   Copy,
   Database,
   Download,
+  FolderDown,
   Inbox,
   Layers,
   RefreshCw,
@@ -30,6 +32,7 @@ import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
 import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
 import { downloadBinaryFile, formatBytes, formatSpeed } from "../lib/format";
+import { downloadZipArchive, saveEntriesToDirectory, type ZipEntry } from "../lib/zip";
 import type { RelayProfileMode } from "../lib/relay-manager";
 
 export interface ReceiveViewProps {
@@ -83,6 +86,7 @@ export function ReceiveView({
   const [receivedText, setReceivedText] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState(false);
   const [receivedFiles, setReceivedFiles] = useState<ReceivedEnhancedFile[]>([]);
+  const [receivedManifest, setReceivedManifest] = useState<FolderManifest | null>(null);
   const [cacheSummary, setCacheSummary] = useState<ResumeCacheSummary>({
     totalChunks: 0,
     totalBytes: 0,
@@ -130,6 +134,7 @@ export function ReceiveView({
     setEnhProgress(null);
     setReceivedText(null);
     setReceivedFiles([]);
+    setReceivedManifest(null);
 
     const secret = codephrase.trim();
     if (!isCodephrase(secret)) {
@@ -233,6 +238,7 @@ export function ReceiveView({
       });
 
       setReceivedFiles(res.files);
+      setReceivedManifest(res.manifest);
       await refreshCacheSummary();
 
       appendTransferHistory({
@@ -613,52 +619,121 @@ export function ReceiveView({
         )}
 
         {/* Received Enhanced Files Ready to Save */}
-        {receivedFiles.length > 0 && (
-          <div className="mt-4 space-y-2.5 border-t border-slate-200 pt-4 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Tệp đã ghép & xác thực SHA-256 ({receivedFiles.length})
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  for (const file of receivedFiles) {
-                    downloadBinaryFile(file.name, file.bytes, file.mimeType);
-                  }
-                }}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Lưu tất cả
-              </button>
-            </div>
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-              {receivedFiles.map((file) => (
-                <li
-                  key={file.relativePath}
-                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-mono font-medium text-slate-900 dark:text-slate-100">
-                      {file.relativePath}
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-500">
-                      {formatBytes(file.size)} · SHA-256: {file.sha256.slice(0, 12)}…
-                    </div>
-                  </div>
+        {receivedFiles.length > 0 && (() => {
+          const isFolderOrMultiple = Boolean(receivedManifest) || receivedFiles.length > 1;
+          const isDirectoryPickerSupported =
+            typeof window !== "undefined" &&
+            typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker === "function";
+
+          const handleDownloadZip = () => {
+            const entries: ZipEntry[] = receivedFiles.map((file) => ({
+              path: file.relativePath,
+              data: file.bytes,
+            }));
+            const zipName = receivedManifest?.manifestId
+              ? `crocflow-folder-${receivedManifest.manifestId}.zip`
+              : `crocflow-transfer-${Date.now()}.zip`;
+            downloadZipArchive(zipName, entries);
+          };
+
+          const handleDirectorySave = async () => {
+            try {
+              const picker = (
+                window as unknown as {
+                  showDirectoryPicker: () => Promise<FileSystemDirectoryHandle>;
+                }
+              ).showDirectoryPicker;
+              const dirHandle = await picker();
+              const entries: ZipEntry[] = receivedFiles.map((file) => ({
+                path: file.relativePath,
+                data: file.bytes,
+              }));
+              const count = await saveEntriesToDirectory(entries, dirHandle);
+              setSuccessText(`Đã lưu trực tiếp ${count} tệp vào thư mục được chọn.`);
+            } catch (err) {
+              if (err instanceof DOMException && err.name === "AbortError") {
+                return;
+              }
+              setErrorText(err instanceof Error ? err.message : String(err));
+            }
+          };
+
+          return (
+            <div className="mt-4 space-y-2.5 border-t border-slate-200 pt-4 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Tệp đã ghép & xác thực SHA-256 ({receivedFiles.length})
+                  </h3>
+                  {receivedManifest && (
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      Cấu trúc thư mục nguyên bản: {receivedManifest.totalFiles} tệp · {formatBytes(receivedManifest.totalBytes)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isFolderOrMultiple && (
+                    <button
+                      type="button"
+                      onClick={handleDownloadZip}
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
+                    >
+                      <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                      Tải về file ZIP (Tất cả thư mục)
+                    </button>
+                  )}
+                  {isFolderOrMultiple && isDirectoryPickerSupported && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDirectorySave()}
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-teal-600/40 bg-teal-50 px-3.5 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 dark:border-teal-500/40 dark:bg-teal-950/50 dark:text-teal-200 dark:hover:bg-teal-900/50 transition-colors"
+                    >
+                      <FolderDown className="h-3.5 w-3.5" aria-hidden="true" />
+                      Lưu trực tiếp vào thư mục (Directory Save)
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => downloadBinaryFile(file.name, file.bytes, file.mimeType)}
-                    className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    onClick={() => {
+                      for (const file of receivedFiles) {
+                        downloadBinaryFile(file.name, file.bytes, file.mimeType);
+                      }
+                    }}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                    Lưu tệp
+                    Lưu từng tệp rời
                   </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+                </div>
+              </div>
+              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                {receivedFiles.map((file) => (
+                  <li
+                    key={file.relativePath}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-mono font-medium text-slate-900 dark:text-slate-100">
+                        {file.relativePath}
+                      </div>
+                      <div className="font-mono text-[11px] text-slate-500">
+                        {formatBytes(file.size)} · SHA-256: {file.sha256.slice(0, 12)}…
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadBinaryFile(file.name, file.bytes, file.mimeType)}
+                      className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                      Lưu tệp
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
       </section>
 
       {/* IndexedDB Resume Cache Manager */}
