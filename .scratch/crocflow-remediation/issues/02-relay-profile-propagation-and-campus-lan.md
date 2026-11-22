@@ -4,10 +4,10 @@
 
 **Blocked by:** 01: Domain Vocabulary Normalization, Branded Codephrase & Bridge Client Unification
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `activeRelayProfile` lifted to shared state accessible across views.
-- [ ] `SendView` and `ReceiveView` configure their transfer clients with the active profile's endpoints.
-- [ ] In "Local Dual-Relay Lab" mode, Standard Mode routes via the local bridge and Enhanced Mode routes via `/ws-dual`.
-- [ ] Active transfer cards render an indicator showing which relay profile is currently active.
-- [ ] Unit/integration tests verify transfer client endpoint configuration under both profiles.
+- [x] `activeRelayProfile` lifted to shared state accessible across views.
+- [x] `SendView` and `ReceiveView` configure their transfer clients with the active profile's endpoints.
+- [x] In "Local Dual-Relay Lab" mode, Standard Mode routes via the local bridge and Enhanced Mode routes via `/ws-dual`.
+- [x] Active transfer cards render an indicator showing which relay profile is currently active.
+- [x] Unit/integration tests verify transfer client endpoint configuration under both profiles.

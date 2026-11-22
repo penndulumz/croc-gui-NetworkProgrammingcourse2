@@ -147,6 +147,8 @@ export const App: React.FC = () => {
       theme={theme}
       onToggleTheme={handleToggleTheme}
       bridgeHealthy={bridgeHealthy}
+      relayProfile={relayProfile}
+      onChangeRelayProfile={handleChangeRelayProfile}
       deviceAlias={deviceAlias}
       topBarAction={<PWAInstallButton compact />}
     >
@@ -157,6 +159,8 @@ export const App: React.FC = () => {
               <SendView
                 bridgeConfig={bridgeConfig}
                 deviceAlias={deviceAlias}
+                relayProfile={relayProfile}
+                onChangeRelayProfile={handleChangeRelayProfile}
                 prefillCode={prefillSendCode}
                 onClearPrefill={() => setPrefillSendCode(undefined)}
                 onHistoryUpdated={handleRefreshHistory}
@@ -165,6 +169,8 @@ export const App: React.FC = () => {
               <ReceiveView
                 bridgeConfig={bridgeConfig}
                 deviceAlias={deviceAlias}
+                relayProfile={relayProfile}
+                onChangeRelayProfile={handleChangeRelayProfile}
                 prefillCode={prefillReceiveCode}
                 prefillMode={prefillReceiveMode}
                 onClearPrefill={() => {

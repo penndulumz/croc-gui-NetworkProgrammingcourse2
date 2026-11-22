@@ -13,6 +13,7 @@ import {
   type NavDestinationId,
 } from "../types/navigation";
 import type { ThemeMode } from "../lib/theme";
+import type { RelayProfileMode } from "../lib/relay-manager";
 
 const NAV_ICONS: Record<NavDestinationId, React.ComponentType<{ className?: string }>> = {
   send: ArrowUpFromLine,
@@ -28,6 +29,8 @@ interface AppShellProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
   bridgeHealthy: boolean | null;
+  relayProfile?: RelayProfileMode;
+  onChangeRelayProfile?: (mode: RelayProfileMode) => void;
   deviceAlias?: string;
   topBarAction?: React.ReactNode;
   children: React.ReactNode;
@@ -39,6 +42,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   theme,
   onToggleTheme,
   bridgeHealthy,
+  relayProfile,
+  onChangeRelayProfile: _onChangeRelayProfile,
   deviceAlias,
   topBarAction,
   children,
@@ -109,6 +114,19 @@ export const AppShell: React.FC<AppShellProps> = ({
                   ? "Bridge cục bộ · Cổng 3000"
                   : "Chưa kết nối Bridge"}
             </p>
+            {relayProfile && (
+              <button
+                type="button"
+                onClick={() => onSelectNav("relays")}
+                className="w-full text-left text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-between transition-colors pt-0.5"
+                title="Bấm để chuyển tới cấu hình Relay"
+              >
+                <span>Hồ sơ Relay:</span>
+                <span className="font-semibold text-teal-700 dark:text-teal-300">
+                  {relayProfile === "local-dual" ? "Local Lab (LAN)" : "Public Relays"}
+                </span>
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -151,6 +169,28 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {relayProfile && (
+              <button
+                type="button"
+                onClick={() => onSelectNav("relays")}
+                title={`Hồ sơ Relay: ${relayProfile === "local-dual" ? "Local Dual-Relay Lab (Mạng nội bộ / Offline)" : "Public Croc Relays (Công cộng)"} — Nhấp để xem & cấu hình`}
+                aria-label={`Hồ sơ Relay: ${relayProfile === "local-dual" ? "Local Lab" : "Public Relays"}`}
+                className={`inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 ${
+                  relayProfile === "local-dual"
+                    ? "border-teal-500/50 bg-teal-50 text-teal-800 dark:border-teal-400/40 dark:bg-teal-950/60 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/60"
+                    : "border-slate-200 bg-slate-100/90 text-slate-700 dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    relayProfile === "local-dual" ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                  }`}
+                  aria-hidden="true"
+                />
+                <span className="hidden sm:inline">Relay:</span>
+                <span>{relayProfile === "local-dual" ? "Local Lab" : "Public Relays"}</span>
+              </button>
+            )}
             {topBarAction}
             <button
               type="button"

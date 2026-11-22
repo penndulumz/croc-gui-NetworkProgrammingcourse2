@@ -30,10 +30,13 @@ import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
 import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
 import { downloadBinaryFile, formatBytes, formatSpeed } from "../lib/format";
+import type { RelayProfileMode } from "../lib/relay-manager";
 
 export interface ReceiveViewProps {
   bridgeConfig: BridgePublicConfig | null;
   deviceAlias: string;
+  relayProfile?: RelayProfileMode;
+  onChangeRelayProfile?: (mode: RelayProfileMode) => void;
   prefillCode?: string;
   prefillMode?: "standard" | "enhanced";
   onClearPrefill?: () => void;
@@ -56,6 +59,8 @@ interface PendingEnhancedOffer {
 export function ReceiveView({
   bridgeConfig,
   deviceAlias,
+  relayProfile = "public",
+  onChangeRelayProfile,
   prefillCode,
   prefillMode,
   onClearPrefill,
@@ -209,9 +214,15 @@ export function ReceiveView({
 
     // Enhanced Mode Receive
     try {
+      const wsDualUrl = deriveBridgeURL(
+        typeof window !== "undefined" ? window.location.protocol : "http:",
+        typeof window !== "undefined" ? window.location.host : "localhost:3000",
+        "/ws-dual",
+      );
       const res = await receiveEnhancedTransfer({
         codephrase: secret,
         dualRelay,
+        baseWsUrl: wsDualUrl,
         signal: controller.signal,
         onStatus: setStatusText,
         onProgress: setEnhProgress,
@@ -339,6 +350,57 @@ export function ReceiveView({
 
       {/* Main Receive Input Card */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        {/* Active Relay Profile Badge */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3.5 py-2 text-xs border border-slate-200 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-500 dark:text-slate-400">Hồ sơ Relay:</span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold ${
+                relayProfile === "local-dual"
+                  ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
+                  : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300/40"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  relayProfile === "local-dual" ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                }`}
+                aria-hidden="true"
+              />
+              {relayProfile === "local-dual"
+                ? "Local Dual-Relay Lab (Offline/LAN)"
+                : "Public Croc Relays"}
+            </span>
+          </div>
+          {onChangeRelayProfile && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                onChangeRelayProfile(relayProfile === "local-dual" ? "public" : "local-dual")
+              }
+              className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              Đổi sang {relayProfile === "local-dual" ? "Public Croc Relays" : "Local Lab"}
+            </button>
+          )}
+        </div>
+
+        {/* Guidance when Local Dual-Relay Lab is active in Standard Mode */}
+        {mode === "standard" && relayProfile === "local-dual" && (
+          <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/80 p-3.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">Lưu ý khi dùng Chuẩn Croc v11 với Local Dual-Relay Lab:</p>
+                <p className="mt-1 leading-relaxed text-amber-800 dark:text-amber-300">
+                  Chế độ Nâng cao (Enhanced Mode) được tối ưu hóa cho Local Dual-Relay Lab qua <code>/ws-dual</code> (hoạt động offline/LAN hoàn toàn không cần mở cổng TCP ra internet). Với Chuẩn Croc v11, kết nối sẽ đi qua Bridge cục bộ nhưng vẫn phụ thuộc vào cổng TCP của relay. Khuyên dùng <strong>Nâng cao CrocFlow</strong> để có trải nghiệm tối ưu trong phòng lab offline.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <label
           htmlFor="receive-codephrase-input"
           className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
@@ -473,7 +535,12 @@ export function ReceiveView({
           <div className="mt-4 space-y-2.5 border-t border-slate-200 pt-4 dark:border-slate-800">
             {statusText && (
               <div className="flex items-center justify-between gap-2 text-xs text-slate-700 dark:text-slate-300">
-                <span className="font-medium">{statusText}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="truncate font-medium">{statusText}</span>
+                  <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">
+                    ({relayProfile === "local-dual" ? "Local Lab" : "Public"})
+                  </span>
+                </div>
                 {progressPercent > 0 && (
                   <span className="font-mono font-semibold tabular-nums">{progressPercent}%</span>
                 )}

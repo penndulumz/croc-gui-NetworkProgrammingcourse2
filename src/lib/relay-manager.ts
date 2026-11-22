@@ -1,3 +1,5 @@
+import { deriveBridgeURL } from "./bridge-client";
+
 export type RelayProfileMode = "public" | "local-dual";
 
 export interface RelayNodeEntry {
@@ -21,12 +23,32 @@ export interface CustomRelayConfig {
   password: string;
 }
 
-const CUSTOM_RELAYS_KEY = "crocflow-custom-relays-v1";
-const RELAY_PROFILE_KEY = "crocflow-relay-profile-v1";
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
 
-export function loadRelayProfile(): RelayProfileMode {
+export interface RelayProfileEndpoints {
+  profile: RelayProfileMode;
+  standardBridgeURL: string;
+  enhancedDualURL: string;
+  isLocalLab: boolean;
+  label: string;
+  badgeText: string;
+}
+
+export const CUSTOM_RELAYS_KEY = "crocflow-custom-relays-v1";
+export const RELAY_PROFILE_KEY = "crocflow-relay-profile-v1";
+
+export function loadRelayProfile(storage?: StorageLike | null): RelayProfileMode {
   try {
-    const saved = localStorage.getItem(RELAY_PROFILE_KEY);
+    const targetStorage =
+      storage !== undefined
+        ? storage
+        : typeof localStorage !== "undefined"
+          ? localStorage
+          : null;
+    const saved = targetStorage?.getItem(RELAY_PROFILE_KEY);
     if (saved === "public" || saved === "local-dual") return saved;
   } catch {
     // Ignore storage read errors
@@ -34,12 +56,39 @@ export function loadRelayProfile(): RelayProfileMode {
   return "public";
 }
 
-export function saveRelayProfile(mode: RelayProfileMode): void {
+export function saveRelayProfile(
+  mode: RelayProfileMode,
+  storage?: StorageLike | null,
+): void {
   try {
-    localStorage.setItem(RELAY_PROFILE_KEY, mode);
+    const targetStorage =
+      storage !== undefined
+        ? storage
+        : typeof localStorage !== "undefined"
+          ? localStorage
+          : null;
+    targetStorage?.setItem(RELAY_PROFILE_KEY, mode);
   } catch {
     // Ignore storage write errors
   }
+}
+
+export function getRelayProfileEndpoints(
+  profile: RelayProfileMode,
+  protocol = typeof window !== "undefined" ? window.location.protocol : "http:",
+  host = typeof window !== "undefined" ? window.location.host : "localhost:3000",
+): RelayProfileEndpoints {
+  const isLocalLab = profile === "local-dual";
+  return {
+    profile,
+    standardBridgeURL: deriveBridgeURL(protocol, host, "/ws"),
+    enhancedDualURL: deriveBridgeURL(protocol, host, "/ws-dual"),
+    isLocalLab,
+    label: isLocalLab ? "Local Lab" : "Public Relays",
+    badgeText: isLocalLab
+      ? "Local Dual-Relay Lab (Offline/LAN)"
+      : "Public Croc Relays",
+  };
 }
 
 export function loadCustomRelays(): CustomRelayConfig[] {
