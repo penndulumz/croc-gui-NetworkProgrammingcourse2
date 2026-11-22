@@ -217,6 +217,47 @@ export interface Translations {
     demoRunning: string;
     demoSuccess: string;
   };
+  modeSelector: {
+    ariaLabel: string;
+    standardTab: string;
+    enhancedTab: string;
+    compareTitle: string;
+    standardTitle: string;
+    standardPoint1: string;
+    standardPoint2: string;
+    standardPoint3: string;
+    enhancedTitle: string;
+    enhancedPoint1: string;
+    enhancedPoint2: string;
+    enhancedPoint3: string;
+    understoodBtn: string;
+    compareBtnTitle: string;
+    closeBtn: string;
+  };
+  streamInspector: {
+    toggleBtn: string;
+    relayAlpha: string;
+    relayBeta: string;
+    evenChunks: string;
+    oddChunks: string;
+    failover: string;
+    failoverRerouted: string;
+    resumeDb: string;
+    cachedSkip: string;
+    rttLabel: string;
+    statusNormal: string;
+    statusSevered: string;
+  };
+  relayProfile: {
+    activeLabel: string;
+    localLabTitle: string;
+    publicRelaysTitle: string;
+    switchBtn: string;
+    switchToLocalTitle: string;
+    switchToPublicTitle: string;
+    standardLocalNoticeTitle: string;
+    standardLocalNoticeBody: string;
+  };
 }
 
 export const DICTIONARY: Record<Locale, Translations> = {
@@ -431,6 +472,47 @@ export const DICTIONARY: Record<Locale, Translations> = {
       demoRunning: "Đang chạy kịch bản...",
       demoSuccess: "Kịch bản hoàn thành!",
     },
+    modeSelector: {
+      ariaLabel: "Chế độ giao thức",
+      standardTab: "Chuẩn Croc v11",
+      enhancedTab: "Nâng cao CrocFlow",
+      compareTitle: "So Sánh Hai Chế Độ Truyền",
+      standardTitle: "Chuẩn Croc v11 (Tương thích CLI)",
+      standardPoint1: "Tương thích 100% với croc CLI chính thức và getcroc.com.",
+      standardPoint2: "Bắt tay mật mã PAKE P-256 + mã hóa đối xứng AES-GCM qua một luồng duy nhất.",
+      standardPoint3: "Phù hợp khi gửi/nhận với máy chủ dòng lệnh hoặc thiết bị không cài CrocFlow.",
+      enhancedTitle: "Nâng cao CrocFlow (2 Relay + Resume)",
+      enhancedPoint1: "Truyền song song 2 Relay: Chunk chẵn qua Relay Alpha, chunk lẻ qua Relay Beta để tối đa hóa băng thông.",
+      enhancedPoint2: "Tự động Failover: Khi Relay Alpha ngắt kết nối, các chunk còn lại lập tức chuyển sang Relay Beta.",
+      enhancedPoint3: "Tiếp tục từ Resume Cache IndexedDB: Bỏ qua các chunk SHA-256 đã nhận khi mạng bị đứt.",
+      understoodBtn: "Đã hiểu",
+      compareBtnTitle: "So sánh hai chế độ truyền",
+      closeBtn: "Đóng",
+    },
+    streamInspector: {
+      toggleBtn: "Chi tiết luồng",
+      relayAlpha: "Relay Alpha",
+      relayBeta: "Relay Beta",
+      evenChunks: "Chunk chẵn",
+      oddChunks: "Chunk lẻ",
+      failover: "Failover",
+      failoverRerouted: "Đã chuyển tuyến",
+      resumeDb: "Resume DB",
+      cachedSkip: "Đã có sẵn",
+      rttLabel: "RTT",
+      statusNormal: "Bình thường",
+      statusSevered: "Đã ngắt kết nối",
+    },
+    relayProfile: {
+      activeLabel: "Hồ sơ Relay:",
+      localLabTitle: "Local Dual-Relay Lab (Offline/LAN)",
+      publicRelaysTitle: "Public Croc Relays",
+      switchBtn: "Đổi Relay",
+      switchToLocalTitle: "Đổi sang Local Dual-Relay Lab",
+      switchToPublicTitle: "Đổi sang Public Croc Relays",
+      standardLocalNoticeTitle: "Lưu ý khi dùng Chuẩn Croc v11 với Local Dual-Relay Lab:",
+      standardLocalNoticeBody: "Chế độ Nâng cao (Enhanced Mode) được tối ưu hóa cho Local Dual-Relay Lab qua /ws-dual (hoạt động offline/LAN hoàn toàn không cần mở cổng TCP ra internet). Với Chuẩn Croc v11, kết nối sẽ đi qua Bridge cục bộ nhưng vẫn phụ thuộc vào cổng TCP của relay. Khuyên dùng Nâng cao CrocFlow để có trải nghiệm tối ưu trong phòng lab offline.",
+    },
   },
   en: {
     common: {
@@ -642,6 +724,47 @@ export const DICTIONARY: Record<Locale, Translations> = {
       severAlphaBtn: "Sever Alpha",
       demoRunning: "Running live demonstration...",
       demoSuccess: "Live demonstration completed successfully!",
+    },
+    modeSelector: {
+      ariaLabel: "Protocol mode",
+      standardTab: "Standard (Croc v11)",
+      enhancedTab: "Enhanced (CrocFlow)",
+      compareTitle: "Transfer Protocol Comparison",
+      standardTitle: "Standard Croc v11 (CLI Compatible)",
+      standardPoint1: "100% interoperable with official croc CLI and getcroc.com.",
+      standardPoint2: "PAKE P-256 cryptographic handshake + AES-GCM single stream.",
+      standardPoint3: "Ideal for terminal users or systems running upstream Go CLI.",
+      enhancedTitle: "Enhanced CrocFlow (Dual-Relay + Resume)",
+      enhancedPoint1: "Concurrent Dual-Relay: Even chunks on Relay Alpha, odd chunks on Relay Beta for multiplexed bandwidth.",
+      enhancedPoint2: "Active Failover: If Relay Alpha disconnects, in-flight chunks dynamically migrate to Relay Beta.",
+      enhancedPoint3: "Delta Resume via IndexedDB: Skips verified SHA-256 chunks after reconnecting.",
+      understoodBtn: "Got it",
+      compareBtnTitle: "Compare protocol modes",
+      closeBtn: "Close",
+    },
+    streamInspector: {
+      toggleBtn: "Stream Stats",
+      relayAlpha: "Relay Alpha",
+      relayBeta: "Relay Beta",
+      evenChunks: "Even chunks",
+      oddChunks: "Odd chunks",
+      failover: "Failover",
+      failoverRerouted: "Rerouted",
+      resumeDb: "Resume DB",
+      cachedSkip: "Cached skip",
+      rttLabel: "RTT",
+      statusNormal: "Normal",
+      statusSevered: "Severed",
+    },
+    relayProfile: {
+      activeLabel: "Relay Profile:",
+      localLabTitle: "Local Dual-Relay Lab (Offline/LAN)",
+      publicRelaysTitle: "Public Croc Relays",
+      switchBtn: "Switch Relay",
+      switchToLocalTitle: "Switch to Local Dual-Relay Lab",
+      switchToPublicTitle: "Switch to Public Croc Relays",
+      standardLocalNoticeTitle: "Notice when using Standard Croc v11 with Local Dual-Relay Lab:",
+      standardLocalNoticeBody: "Enhanced Mode is optimized for the Local Dual-Relay Lab via /ws-dual (operating completely offline/LAN without requiring internet TCP exposure). Under Standard Croc v11, traffic routes through the local bridge but remains dependent on relay TCP port forwarding. Enhanced CrocFlow is recommended for offline lab environments.",
     },
   },
 };

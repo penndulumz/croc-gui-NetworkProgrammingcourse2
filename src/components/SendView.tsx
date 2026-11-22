@@ -54,6 +54,8 @@ import {
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
 import { ModeSelector } from "./ModeSelector";
+import { RelayProfileBanner } from "./RelayProfileBanner";
+import { StreamInspectorDrawer } from "./StreamInspectorDrawer";
 
 export interface SendViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -113,7 +115,6 @@ export function SendView({
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
-  const [showStreamStats, setShowStreamStats] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const enhancedHandleRef = useRef<EnhancedControlHandle | null>(null);
@@ -246,12 +247,28 @@ export function SendView({
 
   const cliCommand = `croc ${codephrase.trim()}`;
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     abortRef.current?.abort();
     enhancedHandleRef.current?.cancel();
     setBusy(false);
-    setStatusText("Đã hủy phiên gửi.");
-  };
+    setStatusText(locale === "vi" ? "Đã hủy phiên gửi." : "Send transfer cancelled.");
+  }, [locale]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showQRModal) {
+          setShowQRModal(false);
+          return;
+        }
+        if (busy) {
+          handleCancel();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showQRModal, busy, handleCancel]);
 
   const handleSimulateAlphaDisconnect = () => {
     enhancedHandleRef.current?.simulateAlphaDisconnect();
@@ -505,56 +522,14 @@ export function SendView({
 
       {/* Main Transfer Card */}
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
-        {/* Active Relay Profile Badge */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50/70 px-3.5 py-2 text-xs border border-zinc-200/80 dark:border-zinc-800/80 dark:bg-zinc-950/60">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-zinc-500 dark:text-zinc-400">Hồ sơ Relay:</span>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold ${
-                isLocalProfile
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isLocalProfile ? "bg-emerald-400 animate-pulse" : "bg-emerald-500"
-                }`}
-                aria-hidden="true"
-              />
-              {isLocalProfile
-                ? "Local Dual-Relay Lab (Offline/LAN)"
-                : "Public Croc Relays"}
-            </span>
-          </div>
-          {onChangeRelayProfile && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                onChangeRelayProfile(isLocalProfile ? "public" : "local-lab")
-              }
-              className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 font-medium underline-offset-2 hover:underline disabled:opacity-50 transition-colors"
-            >
-              Đổi sang {isLocalProfile ? "Public Croc Relays" : "Local Lab"}
-            </button>
-          )}
-        </div>
-
-        {/* Guidance when Local Dual-Relay Lab is active in Standard Mode */}
-        {mode === "standard" && isLocalProfile && (
-          <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/5 dark:text-amber-200">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-              <div>
-                <p className="font-semibold">Lưu ý khi dùng Chuẩn Croc v11 với Local Dual-Relay Lab:</p>
-                <p className="mt-1 leading-relaxed text-amber-800 dark:text-amber-300">
-                  Chế độ Nâng cao (Enhanced Mode) được tối ưu hóa cho Local Dual-Relay Lab qua <code>/ws-dual</code> (hoạt động offline/LAN hoàn toàn không cần mở cổng TCP ra internet). Với Chuẩn Croc v11, kết nối sẽ đi qua Bridge cục bộ nhưng vẫn phụ thuộc vào cổng TCP của relay. Khuyên dùng <strong>Nâng cao CrocFlow</strong> để có trải nghiệm tối ưu trong phòng lab offline.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Active Relay Profile Banner */}
+        <RelayProfileBanner
+          relayProfile={relayProfile}
+          mode={mode}
+          locale={locale}
+          busy={busy}
+          onChangeRelayProfile={onChangeRelayProfile}
+        />
 
         {/* Payload Selector Header */}
         {mode === "standard" ? (
@@ -569,11 +544,12 @@ export function SendView({
               }`}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
-              Tệp tin
+              {locale === "vi" ? "Tệp tin" : "Files"}
             </button>
             <button
               type="button"
               onClick={() => setPayloadKind("text")}
+              title={locale === "vi" ? "Văn bản nhanh (tối đa 1 MiB)" : "Quick text (up to 1 MiB)"}
               className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                 payloadKind === "text"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs"
@@ -581,7 +557,7 @@ export function SendView({
               }`}
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
-              Văn bản nhanh (≤ 1 MiB)
+              {locale === "vi" ? "Văn bản" : "Text"}
             </button>
           </div>
         ) : (
@@ -1027,43 +1003,12 @@ export function SendView({
 
             {/* Expandable Dual-Relay Stream Stats Drawer */}
             {mode === "enhanced" && enhProgress && (
-              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <button
-                  type="button"
-                  onClick={() => setShowStreamStats((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                >
-                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showStreamStats ? "rotate-90" : ""}`} />
-                  <span>{locale === "vi" ? "Chi tiết luồng Dual-Relay" : "Dual-Relay Stream Stats"}</span>
-                </button>
-
-                {showStreamStats && (
-                  <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4 font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Lane Alpha</span>
-                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{enhProgress.alphaChunks}</span>
-                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Chunk chẵn" : "Even chunks"}</span>
-                    </div>
-                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Lane Beta</span>
-                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{enhProgress.betaChunks}</span>
-                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Chunk lẻ" : "Odd chunks"}</span>
-                    </div>
-                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Failover</span>
-                      <span className={`text-sm font-bold ${enhProgress.failoverChunks > 0 ? "text-amber-600" : "text-zinc-900 dark:text-zinc-100"}`}>
-                        {enhProgress.failoverChunks}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Đã chuyển tuyến" : "Rerouted"}</span>
-                    </div>
-                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Resume DB</span>
-                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{enhProgress.resumedChunks}</span>
-                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Đã có sẵn" : "Cached skip"}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <StreamInspectorDrawer
+                progress={enhProgress}
+                locale={locale}
+                alphaRttMs={isLocalProfile ? null : (fastestProbedRelay?.rttMs ?? null)}
+                betaRttMs={isLocalProfile ? null : (fastestProbedRelay?.rttMs ? fastestProbedRelay.rttMs + 4 : null)}
+              />
             )}
 
             {/* Granular Per-File Progress Bars for Multi-File Transfers */}
