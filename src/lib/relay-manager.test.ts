@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  findFastestRelay,
   loadRelayProfile,
   saveRelayProfile,
   getRelayProfileEndpoints,
@@ -120,4 +121,53 @@ test("rankRelaysByLatency sorts online nodes by RTT and offline nodes at the end
   assert.equal(ranked[1].id, "node-2");     // 25ms
   assert.equal(ranked[2].id, "node-1");     // 120ms
   assert.equal(ranked[3].id, "node-3");     // offline
+});
+
+test("findFastestRelay identifies lowest latency relay by address, host, or index", () => {
+  const addresses = [
+    "1.getcroc.com:9009",
+    "2.getcroc.com:9009",
+    "3.getcroc.com:9009",
+    "4.getcroc.com:9009",
+  ];
+
+  // Address keyed
+  const latenciesAddr: Record<string, number | null> = {
+    "1.getcroc.com:9009": 140,
+    "2.getcroc.com:9009": 25,
+    "3.getcroc.com:9009": 85,
+    "4.getcroc.com:9009": null,
+  };
+  const fastest1 = findFastestRelay(latenciesAddr, addresses);
+  assert.notEqual(fastest1, null);
+  assert.equal(fastest1?.index, 1);
+  assert.equal(fastest1?.host, "2.getcroc.com");
+  assert.equal(fastest1?.rttMs, 25);
+
+  // Host keyed
+  const latenciesHost: Record<string, number | null> = {
+    "1.getcroc.com": 15,
+    "2.getcroc.com": 45,
+  };
+  const fastest2 = findFastestRelay(latenciesHost, addresses);
+  assert.notEqual(fastest2, null);
+  assert.equal(fastest2?.index, 0);
+  assert.equal(fastest2?.host, "1.getcroc.com");
+  assert.equal(fastest2?.rttMs, 15);
+
+  // Index keyed
+  const latenciesIdx: Record<string, number | null> = {
+    "2": 10,
+    "3": 50,
+  };
+  const fastest3 = findFastestRelay(latenciesIdx, addresses);
+  assert.notEqual(fastest3, null);
+  assert.equal(fastest3?.index, 2);
+  assert.equal(fastest3?.host, "3.getcroc.com");
+  assert.equal(fastest3?.rttMs, 10);
+
+  // Returns null when no valid latencies or empty addresses
+  assert.equal(findFastestRelay({}, addresses), null);
+  assert.equal(findFastestRelay({ "1.getcroc.com": null }, addresses), null);
+  assert.equal(findFastestRelay(latenciesAddr, []), null);
 });

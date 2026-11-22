@@ -39,6 +39,101 @@ export interface RelayProfileEndpoints {
 
 export const CUSTOM_RELAYS_KEY = "crocflow-custom-relays-v1";
 export const RELAY_PROFILE_KEY = "crocflow-relay-profile-v1";
+export const RELAY_LATENCIES_KEY = "crocflow-relay-latencies-v1";
+
+export function loadRelayLatencies(
+  storage?: StorageLike | null,
+): Record<string, number | null> {
+  try {
+    const targetStorage =
+      storage !== undefined
+        ? storage
+        : typeof localStorage !== "undefined"
+          ? localStorage
+          : null;
+    const raw = targetStorage?.getItem(RELAY_LATENCIES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveRelayLatencies(
+  latencies: Record<string, number | null>,
+  storage?: StorageLike | null,
+): void {
+  try {
+    const targetStorage =
+      storage !== undefined
+        ? storage
+        : typeof localStorage !== "undefined"
+          ? localStorage
+          : null;
+    targetStorage?.setItem(RELAY_LATENCIES_KEY, JSON.stringify(latencies));
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+export async function probePublicRelays(
+  relayAddresses: string[],
+): Promise<Record<string, number | null>> {
+  const latencies: Record<string, number | null> = {};
+  await Promise.all(
+    relayAddresses.map(async (addr, idx) => {
+      try {
+        const res = await fetch(`/api/relays/ping?target=public&index=${idx}`, {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { ok: boolean; rttMs: number | null; host?: string };
+          if (data.ok && typeof data.rttMs === "number") {
+            latencies[addr] = data.rttMs;
+            if (data.host) latencies[data.host] = data.rttMs;
+            latencies[String(idx)] = data.rttMs;
+          }
+        }
+      } catch {
+        // Ignore probe error
+      }
+    }),
+  );
+  saveRelayLatencies(latencies);
+  return latencies;
+}
+
+export function findFastestRelay(
+  latencies: Record<string, number | null>,
+  relayAddresses: string[],
+): { index: number; host: string; rttMs: number } | null {
+  if (!relayAddresses || relayAddresses.length === 0 || !latencies) {
+    return null;
+  }
+
+  let fastest: { index: number; host: string; rttMs: number } | null = null;
+
+  for (let idx = 0; idx < relayAddresses.length; idx++) {
+    const addr = relayAddresses[idx];
+    const lastColon = addr.lastIndexOf(":");
+    const host = lastColon > 0 ? addr.slice(0, lastColon) : addr;
+
+    const rtt =
+      latencies[addr] ??
+      latencies[host] ??
+      latencies[String(idx)] ??
+      latencies[`public-${idx}`];
+
+    if (typeof rtt === "number" && Number.isFinite(rtt) && rtt >= 0) {
+      if (!fastest || rtt < fastest.rttMs) {
+        fastest = { index: idx, host, rttMs: rtt };
+      }
+    }
+  }
+
+  return fastest;
+}
 
 export function loadRelayProfile(storage?: StorageLike | null): RelayProfileMode {
   try {

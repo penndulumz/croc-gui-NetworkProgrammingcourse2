@@ -4,10 +4,10 @@
 
 **Blocked by:** 01: Domain Vocabulary Normalization, Branded Codephrase & Bridge Client Unification
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Function `generateOptimizedCodephrase(targetRelayIndex)` implemented to generate phrases matching target relay hash.
-- [ ] Standard Mode Codephrase generation auto-selects the fastest public relay when latency data is present.
-- [ ] UI shows "Optimized for Relay N (X ms)" badge when an optimized phrase is active.
-- [ ] Enhanced Mode directly routes transfers to the lowest-ping Relay Node.
-- [ ] Unit tests verify candidate generation speed (<5ms) and deterministic relay mapping.
+- [x] Function `generateOptimizedCodephrase(targetRelayIndex)` implemented to generate phrases matching target relay hash.
+- [x] Standard Mode Codephrase generation auto-selects the fastest public relay when latency data is present.
+- [x] UI shows "Optimized for Relay N (X ms)" badge when an optimized phrase is active.
+- [x] Enhanced Mode directly routes transfers to the lowest-ping Relay Node.
+- [x] Unit tests verify candidate generation speed (<5ms) and deterministic relay mapping.

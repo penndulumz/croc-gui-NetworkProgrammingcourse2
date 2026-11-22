@@ -391,6 +391,7 @@ export async function sendEnhancedTransfer(options: {
   files: ManifestInputFile[];
   codephrase: string;
   dualRelay?: boolean;
+  targetRelayNode?: string;
   chunkSize?: number;
   baseWsUrl?: string;
   wsFactory?: WebSocketFactory;
@@ -405,6 +406,7 @@ export async function sendEnhancedTransfer(options: {
     files,
     codephrase,
     dualRelay = true,
+    targetRelayNode,
     chunkSize = 64 * 1024,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
@@ -470,9 +472,11 @@ export async function sendEnhancedTransfer(options: {
 
   try {
     onStatus?.(
-      dualRelay
-        ? "Đang mở kết nối đồng thời tới Relay Alpha (Chẵn) & Relay Beta (Lẻ)…"
-        : "Đang kết nối tới Relay Alpha…",
+      targetRelayNode
+        ? `Đang định tuyến trực tiếp qua Relay Node nhanh nhất (${targetRelayNode})…`
+        : dualRelay
+          ? "Đang mở kết nối đồng thời tới Relay Alpha (Chẵn) & Relay Beta (Lẻ)…"
+          : "Đang kết nối tới Relay Alpha…",
     );
 
     const handleMessage = (lane: RelayLane, msg: WirePlainMessage) => {
@@ -521,9 +525,11 @@ export async function sendEnhancedTransfer(options: {
         kind: "relay",
         mode: "enhanced",
         relay: "alpha",
-        title: dualRelay
-          ? "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)"
-          : "Đã kết nối Relay Alpha",
+        title: targetRelayNode
+          ? `Định tuyến trực tiếp qua Relay Node nhanh nhất (${targetRelayNode})`
+          : dualRelay
+            ? "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)"
+            : "Đã kết nối Relay Alpha",
         detail: `Room ${room}`,
       });
       protocolEventBus.setPakeStep("pake", "active");

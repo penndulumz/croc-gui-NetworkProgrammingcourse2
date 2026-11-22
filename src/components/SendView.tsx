@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Check,
@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Zap,
 } from "lucide-react";
-import { asCodephrase, generateCode, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
+import { asCodephrase, generateCode, generateOptimizedCodephrase, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
 import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
 import { maxTextTransferBytes, type FileProgress } from "../protocol/croc/types";
 import {
@@ -31,7 +31,12 @@ import {
 import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
 import { appendTransferHistory } from "../lib/history-store";
 import { formatBytes, formatSpeed } from "../lib/format";
-import type { RelayProfileMode } from "../lib/relay-manager";
+import {
+  findFastestRelay,
+  loadRelayLatencies,
+  probePublicRelays,
+  type RelayProfileMode,
+} from "../lib/relay-manager";
 
 export interface SendViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -61,7 +66,13 @@ export function SendView({
   const [textPayload, setTextPayload] = useState("");
   const [codephrase, setCodephrase] = useState("4281-croc-flow-demo");
   const [dualRelay, setDualRelay] = useState(true);
+  const [targetFastestRelay, setTargetFastestRelay] = useState(true);
   const [chunkSize, setChunkSize] = useState<number>(64 * 1024);
+  const [optimizedRelay, setOptimizedRelay] = useState<{
+    index: number;
+    host: string;
+    rttMs: number;
+  } | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [statusText, setStatusText] = useState("");
@@ -77,17 +88,54 @@ export function SendView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
 
+  const fastestProbedRelay = useMemo(() => {
+    const relayAddresses = bridgeConfig?.relayAddresses ?? [];
+    const latencies = loadRelayLatencies();
+    return findFastestRelay(latencies, relayAddresses);
+  }, [bridgeConfig]);
+
+  const autoGenerateCode = useCallback(
+    async (targetMode: SendMode = mode) => {
+      const relayAddresses = bridgeConfig?.relayAddresses ?? [];
+      if (targetMode === "standard" && relayAddresses.length > 0) {
+        let latencies = loadRelayLatencies();
+        let fastest = findFastestRelay(latencies, relayAddresses);
+        if (!fastest) {
+          try {
+            latencies = await probePublicRelays(relayAddresses);
+            fastest = findFastestRelay(latencies, relayAddresses);
+          } catch {
+            // Ignore probe errors
+          }
+        }
+        if (fastest) {
+          const optimized = await generateOptimizedCodephrase(
+            fastest.index,
+            relayAddresses.length,
+          );
+          setCodephrase(optimized);
+          setOptimizedRelay(fastest);
+          return;
+        }
+      }
+      setOptimizedRelay(null);
+      setCodephrase(generateCode());
+    },
+    [bridgeConfig, mode],
+  );
+
   useEffect(() => {
     if (prefillCode) {
       setCodephrase(prefillCode);
+      setOptimizedRelay(null);
       onClearPrefill?.();
       return;
     }
-    setCodephrase(generateCode());
-  }, [prefillCode, onClearPrefill]);
+    void autoGenerateCode();
+  }, [prefillCode, onClearPrefill, autoGenerateCode]);
 
   const regenerateCode = () => {
-    setCodephrase(generateCode());
+    void autoGenerateCode();
   };
 
   const copyText = async (label: string, value: string) => {
@@ -254,10 +302,16 @@ export function SendView({
         typeof window !== "undefined" ? window.location.host : "localhost:3000",
         "/ws-dual",
       );
+      const targetedNode =
+        targetFastestRelay && fastestProbedRelay
+          ? `${fastestProbedRelay.host} (${fastestProbedRelay.rttMs} ms)`
+          : undefined;
+
       const res = await sendEnhancedTransfer({
         files: inputs,
         codephrase: secret,
         dualRelay,
+        targetRelayNode: targetedNode,
         chunkSize,
         chunkDelayMs: 12,
         baseWsUrl: wsDualUrl,
@@ -415,7 +469,10 @@ export function SendView({
           role="tab"
           aria-selected={mode === "standard"}
           disabled={busy}
-          onClick={() => setMode("standard")}
+          onClick={() => {
+            setMode("standard");
+            void autoGenerateCode("standard");
+          }}
           className={`flex min-h-[54px] items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
             mode === "standard"
               ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
@@ -564,6 +621,21 @@ export function SendView({
                   className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                 />
                 Chế độ 2 Relay (Alpha Chẵn / Beta Lẻ)
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={targetFastestRelay}
+                  disabled={busy}
+                  onChange={(e) => setTargetFastestRelay(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                />
+                Định tuyến trực tiếp qua Relay Node nhanh nhất
+                {fastestProbedRelay && (
+                  <span className="text-xs font-normal text-teal-700 dark:text-teal-400">
+                    (⚡ {fastestProbedRelay.host} · {fastestProbedRelay.rttMs} ms)
+                  </span>
+                )}
               </label>
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <label htmlFor="chunk-size-select">Kích thước Chunk:</label>
@@ -741,7 +813,10 @@ export function SendView({
                   type="text"
                   value={codephrase}
                   disabled={busy}
-                  onChange={(e) => setCodephrase(e.target.value)}
+                  onChange={(e) => {
+                    setCodephrase(e.target.value);
+                    setOptimizedRelay(null);
+                  }}
                   className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-sm font-semibold text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
                 <button
@@ -754,6 +829,14 @@ export function SendView({
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
+              {optimizedRelay && (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/50 dark:text-amber-300">
+                    <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                    ⚡ Tối ưu cho Relay #{optimizedRelay.index + 1} ({optimizedRelay.host}, {optimizedRelay.rttMs} ms)
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">

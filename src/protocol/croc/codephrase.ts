@@ -114,6 +114,31 @@ export async function sshCodeComponents(secret: string | Codephrase) {
   return { room, passphrase };
 }
 
+export async function generateOptimizedCodephrase(
+  targetRelayIndex: number,
+  relayCount: number = 4,
+  maxAttempts: number = 200,
+): Promise<Codephrase> {
+  if (
+    !Number.isSafeInteger(targetRelayIndex) ||
+    targetRelayIndex < 0 ||
+    targetRelayIndex >= relayCount
+  ) {
+    throw new RangeError(
+      `targetRelayIndex must be an integer between 0 and ${relayCount - 1}, received ${targetRelayIndex}`,
+    );
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = generateCode();
+    if ((await relayIndex(candidate, relayCount)) === targetRelayIndex) {
+      return candidate;
+    }
+  }
+
+  return generateCode();
+}
+
 export async function relayIndex(secret: string | Codephrase, count: number) {
   if (!Number.isSafeInteger(count) || count <= 0) {
     throw new Error("relay count must be positive");

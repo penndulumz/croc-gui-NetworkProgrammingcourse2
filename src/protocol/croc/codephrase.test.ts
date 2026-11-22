@@ -5,6 +5,7 @@ import {
   codeComponents,
   effWords,
   generateCode,
+  generateOptimizedCodephrase,
   isCodephrase,
   relayIndex,
 } from "./codephrase.ts";
@@ -60,4 +61,16 @@ test("asCodephrase returns branded Codephrase or throws on invalid input", () =>
   assert.equal(code, "acid-acorn-acre");
   assert.throws(() => asCodephrase("short"), /Invalid codephrase/);
   assert.throws(() => asCodephrase("has space here"), /Invalid codephrase/);
+});
+
+test("generateOptimizedCodephrase returns valid codephrase matching target index for 0, 1, 2, 3 under 50ms", async () => {
+  const started = performance.now();
+  for (let target = 0; target < 4; target++) {
+    const phrase = await generateOptimizedCodephrase(target, 4);
+    assert.equal(isCodephrase(phrase), true);
+    const mapped = await relayIndex(phrase, 4);
+    assert.equal(mapped, target);
+  }
+  const totalMs = performance.now() - started;
+  assert.ok(totalMs < 50, `Expected total runtime < 50ms, took ${totalMs.toFixed(2)}ms`);
 });

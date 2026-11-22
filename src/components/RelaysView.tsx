@@ -16,6 +16,7 @@ import {
   pingRelayNode,
   rankRelaysByLatency,
   saveCustomRelays,
+  saveRelayLatencies,
   type CustomRelayConfig,
   type RelayNodeEntry,
   type RelayProfileMode,
@@ -146,6 +147,19 @@ export function RelaysView({
         }
       }),
     );
+
+    const latenciesRecord: Record<string, number | null> = {};
+    for (const p of probed) {
+      if (p.rttMs !== null) {
+        latenciesRecord[p.address] = p.rttMs;
+        latenciesRecord[p.host] = p.rttMs;
+        latenciesRecord[p.id] = p.rttMs;
+        if (typeof p.publicIndex === "number") {
+          latenciesRecord[String(p.publicIndex)] = p.rttMs;
+        }
+      }
+    }
+    saveRelayLatencies(latenciesRecord);
 
     setNodes(rankRelaysByLatency(probed));
     onRefreshStatus();
