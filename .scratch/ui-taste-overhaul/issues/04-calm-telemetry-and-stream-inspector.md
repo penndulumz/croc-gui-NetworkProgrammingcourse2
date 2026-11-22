@@ -4,8 +4,8 @@
 
 **Blocked by:** 03: Unified Drag-and-Drop Canvas & Streamlined Target Bar
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Default active transfer view shows only primary metrics: progress bar, percentage, speed, and ETA
-- [ ] An expandable drawer/accordion reveals real-time Alpha vs. Beta chunk distribution and failover metrics when toggled
-- [ ] Stalled states and completion messages render as sleek, non-intrusive status badges
+- [x] Default active transfer view shows only primary metrics: progress bar, percentage, speed, and ETA
+- [x] An expandable drawer/accordion reveals real-time Alpha vs. Beta chunk distribution and failover metrics when toggled
+- [x] Stalled states and completion messages render as sleek, non-intrusive status badges

@@ -18,6 +18,7 @@ import {
   Zap,
   Smartphone,
   QrCode,
+  ChevronRight,
 } from "lucide-react";
 import { asCodephrase, generateCode, generateOptimizedCodephrase, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
 import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
@@ -112,6 +113,7 @@ export function SendView({
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showStreamStats, setShowStreamStats] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const enhancedHandleRef = useRef<EnhancedControlHandle | null>(null);
@@ -984,79 +986,82 @@ export function SendView({
 
         {/* Live Progress & Feedback */}
         {(busy || statusText || errorText || successText) && (
-          <div className="mt-4 space-y-2.5 border-t border-slate-200 pt-4 dark:border-slate-800">
-            {statusText && (
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-700 dark:text-slate-300">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="truncate font-medium">{statusText}</span>
-                  <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">
-                    ({isLocalProfile ? "Local Lab" : "Public"})
+          <div className="mt-5 space-y-3 rounded-2xl border border-zinc-200/90 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+            {/* Primary Calm Telemetry */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {busy && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />}
+                <span className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                  {statusText || (busy ? (locale === "vi" ? "Đang truyền..." : "Transferring...") : "")}
+                </span>
+                {metrics.isStalled && (
+                  <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                    Stalled
                   </span>
-                </div>
-                {progressPercent > 0 && (
-                  <span className="font-mono font-semibold tabular-nums">{progressPercent}%</span>
                 )}
               </div>
-            )}
+              <div className="flex items-center gap-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                {(busy || metrics.speedBps > 0) && (
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatSpeed(metrics.speedBps)}</span>
+                )}
+                {(busy || (metrics.etaSeconds !== null && metrics.etaSeconds > 0)) && (
+                  <span>ETA {formatEta(metrics.etaSeconds, metrics.isStalled)}</span>
+                )}
+                {progressPercent > 0 && (
+                  <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 tabular-nums">
+                    {progressPercent}%
+                  </span>
+                )}
+              </div>
+            </div>
 
+            {/* Smooth Progress Bar */}
             {(busy || progressPercent > 0) && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <div
-                  className="h-full rounded-full bg-teal-600 transition-all duration-150 dark:bg-teal-400"
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-200 dark:bg-emerald-400"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
             )}
 
-            {/* Live Metrics: Speed, ETA, Bytes */}
-            {(busy || stdProgress || enhProgress) && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
-                  <span>
-                    <strong className="font-sans font-medium text-slate-500 dark:text-slate-400">Tốc độ:</strong>{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{formatSpeed(metrics.speedBps)}</span>
-                  </span>
-                  <span>
-                    <strong className="font-sans font-medium text-slate-500 dark:text-slate-400">Còn lại (ETA):</strong>{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {formatEta(metrics.etaSeconds, metrics.isStalled)}
-                    </span>
-                  </span>
-                  {mode === "standard" && stdProgress && stdProgress.totalSize > 0 && (
-                    <span className="text-slate-600 dark:text-slate-400">
-                      {formatBytes(stdProgress.totalBytes)} / {formatBytes(stdProgress.totalSize)}
-                    </span>
-                  )}
-                  {mode === "enhanced" && enhProgress && (
-                    <span className="text-slate-600 dark:text-slate-400">
-                      {formatBytes(enhProgress.bytesTransferred)} / {formatBytes(enhProgress.totalBytes)}
-                    </span>
-                  )}
-                </div>
-                {metrics.isStalled && (
-                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
-                    Tạm dừng (Stalled)
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Expandable Dual-Relay Stream Stats Drawer */}
+            {mode === "enhanced" && enhProgress && (
+              <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                <button
+                  type="button"
+                  onClick={() => setShowStreamStats((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showStreamStats ? "rotate-90" : ""}`} />
+                  <span>{locale === "vi" ? "Chi tiết luồng Dual-Relay" : "Dual-Relay Stream Stats"}</span>
+                </button>
 
-            {enhProgress && (
-              <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs tabular-nums text-slate-600 dark:text-slate-400">
-                <span>
-                  Tiến độ chunk: {enhProgress.completedChunks}/{enhProgress.totalChunks}
-                </span>
-                <span>Alpha: {enhProgress.alphaChunks}</span>
-                <span>Beta: {enhProgress.betaChunks}</span>
-                {enhProgress.failoverChunks > 0 && (
-                  <span className="font-semibold text-amber-700 dark:text-amber-400">
-                    Failover: {enhProgress.failoverChunks}
-                  </span>
-                )}
-                {enhProgress.resumedChunks > 0 && (
-                  <span className="font-semibold text-indigo-700 dark:text-indigo-400">
-                    Resume: {enhProgress.resumedChunks}
-                  </span>
+                {showStreamStats && (
+                  <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Lane Alpha</span>
+                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{enhProgress.alphaChunks}</span>
+                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Chunk chẵn" : "Even chunks"}</span>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Lane Beta</span>
+                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{enhProgress.betaChunks}</span>
+                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Chunk lẻ" : "Odd chunks"}</span>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Failover</span>
+                      <span className={`text-sm font-bold ${enhProgress.failoverChunks > 0 ? "text-amber-600" : "text-zinc-900 dark:text-zinc-100"}`}>
+                        {enhProgress.failoverChunks}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Đã chuyển tuyến" : "Rerouted"}</span>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">Resume DB</span>
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{enhProgress.resumedChunks}</span>
+                      <span className="text-[10px] text-zinc-500 block font-sans">{locale === "vi" ? "Đã có sẵn" : "Cached skip"}</span>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
