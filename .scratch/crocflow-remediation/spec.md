@@ -1,6 +1,6 @@
 # Feature Spec: CrocFlow Code Review Hardening & Specification Remediation
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
