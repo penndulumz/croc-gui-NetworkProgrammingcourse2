@@ -18,6 +18,7 @@ import {
   loadDeviceAlias,
   loadTransferHistory,
   saveDeviceAlias,
+  type PeerPreset,
   type TransferHistoryEntry,
 } from "./lib/history-store";
 import {
@@ -70,6 +71,7 @@ export const App: React.FC = () => {
   const [deviceAlias, setDeviceAlias] = useState<string>(() => loadDeviceAlias());
   const [history, setHistory] = useState<TransferHistoryEntry[]>(() => loadTransferHistory());
 
+  const [targetPeerForSend, setTargetPeerForSend] = useState<PeerPreset | undefined>(undefined);
   const [prefillSendCode, setPrefillSendCode] = useState<string | undefined>(undefined);
   const [prefillReceiveCode, setPrefillReceiveCode] = useState<string | undefined>(
     initialQuery.code,
@@ -133,6 +135,11 @@ export const App: React.FC = () => {
     setActiveNav("send");
   };
 
+  const handleQuickSendToPeer = (peer: PeerPreset) => {
+    setTargetPeerForSend(peer);
+    setActiveNav("send");
+  };
+
   const handleUseCodeForReceive = (code: string) => {
     setPrefillReceiveCode(code);
     setActiveNav("receive");
@@ -164,6 +171,8 @@ export const App: React.FC = () => {
                 prefillCode={prefillSendCode}
                 onClearPrefill={() => setPrefillSendCode(undefined)}
                 onHistoryUpdated={handleRefreshHistory}
+                selectedPeer={targetPeerForSend}
+                onClearSelectedPeer={() => setTargetPeerForSend(undefined)}
               />
             ) : (
               <ReceiveView
@@ -229,6 +238,7 @@ export const App: React.FC = () => {
           onRefreshHistory={handleRefreshHistory}
           onUseCodeForSend={handleUseCodeForSend}
           onUseCodeForReceive={handleUseCodeForReceive}
+          onQuickSendToPeer={handleQuickSendToPeer}
         />
       ) : (
         <AppDocsHubView

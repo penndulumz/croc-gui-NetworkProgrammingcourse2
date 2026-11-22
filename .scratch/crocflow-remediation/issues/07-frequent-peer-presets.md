@@ -4,10 +4,10 @@
 
 **Blocked by:** 01: Domain Vocabulary Normalization, Branded Codephrase & Bridge Client Unification
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `PeerPreset` data model and CRUD functions added to `src/lib/history-store.ts`.
-- [ ] "Frequent Peers" management UI added to `HistoryGroupView.tsx` (add, edit, delete, search).
-- [ ] Quick-select peer button/dropdown added to `SendView.tsx` to prefill transfer targets.
-- [ ] Peer presets persisted in `localStorage`.
-- [ ] Unit tests verify peer preset serialization, validation, and retrieval.
+- [x] `PeerPreset` data model and CRUD functions added to `src/lib/history-store.ts`.
+- [x] "Frequent Peers" management UI added to `HistoryGroupView.tsx` (add, edit, delete, search).
+- [x] Quick-select peer button/dropdown added to `SendView.tsx` to prefill transfer targets.
+- [x] Peer presets persisted in `localStorage`.
+- [x] Unit tests verify peer preset serialization, validation, and retrieval.

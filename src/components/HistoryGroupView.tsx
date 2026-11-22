@@ -4,12 +4,17 @@ import {
   ArrowUpRight,
   CalendarClock,
   Check,
+  Edit2,
   History,
   KeyRound,
   Plus,
   Search,
+  Send,
   Smartphone,
   Trash2,
+  Users,
+  X,
+  Zap,
 } from "lucide-react";
 import {
   deriveMonthlyGroupCode,
@@ -21,6 +26,11 @@ import {
 } from "../lib/group-passphrase";
 import {
   clearTransferHistory,
+  deletePeerPreset,
+  loadPeerPresets,
+  savePeerPreset,
+  touchPeerPreset,
+  type PeerPreset,
   type TransferHistoryEntry,
 } from "../lib/history-store";
 import { formatBytes, formatDateTimeVi } from "../lib/format";
@@ -32,6 +42,7 @@ export interface HistoryGroupViewProps {
   onRefreshHistory: () => void;
   onUseCodeForSend: (code: string) => void;
   onUseCodeForReceive: (code: string) => void;
+  onQuickSendToPeer?: (peer: PeerPreset) => void;
 }
 
 export function HistoryGroupView({
@@ -41,16 +52,29 @@ export function HistoryGroupView({
   onRefreshHistory,
   onUseCodeForSend,
   onUseCodeForReceive,
+  onQuickSendToPeer,
 }: HistoryGroupViewProps) {
   const [aliasDraft, setAliasDraft] = useState(deviceAlias);
   const [aliasSaved, setAliasSaved] = useState(false);
 
+  // Group passphrases state
   const [groups, setGroups] = useState<GroupPassphraseRecord[]>(() => loadGroupPassphrases());
   const [derivedMap, setDerivedMap] = useState<Record<string, DerivedGroupCode>>({});
   const [groupName, setGroupName] = useState("");
   const [groupSecret, setGroupSecret] = useState("");
   const [groupError, setGroupError] = useState<string | null>(null);
 
+  // Frequent Peer Presets state
+  const [peers, setPeers] = useState<PeerPreset[]>(() => loadPeerPresets());
+  const [peerSearchQuery, setPeerSearchQuery] = useState("");
+  const [peerAliasInput, setPeerAliasInput] = useState("");
+  const [peerProfileInput, setPeerProfileInput] = useState<"default" | "public" | "local-dual">("default");
+  const [peerNotesInput, setPeerNotesInput] = useState("");
+  const [editingPeerId, setEditingPeerId] = useState<string | null>(null);
+  const [peerError, setPeerError] = useState<string | null>(null);
+  const [peerSuccess, setPeerSuccess] = useState<string | null>(null);
+
+  // Transfer history state
   const [searchQuery, setSearchQuery] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "send" | "receive">("all");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -113,6 +137,78 @@ export function HistoryGroupView({
     setGroups(next);
     saveGroupPassphrases(next);
   };
+
+  // Peer preset actions
+  const handleSavePeer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPeerError(null);
+    const cleanAlias = peerAliasInput.trim();
+    if (!cleanAlias) {
+      setPeerError("Vui lòng nhập tên thiết bị / bí danh.");
+      return;
+    }
+
+    const saved = savePeerPreset({
+      id: editingPeerId || undefined,
+      alias: cleanAlias,
+      preferredRelayProfile: peerProfileInput === "default" ? undefined : peerProfileInput,
+      notes: peerNotesInput.trim() || undefined,
+    });
+
+    setPeers(loadPeerPresets());
+    setPeerAliasInput("");
+    setPeerProfileInput("default");
+    setPeerNotesInput("");
+    setEditingPeerId(null);
+    setPeerSuccess(
+      editingPeerId
+        ? `Đã cập nhật thiết bị "${saved.alias}".`
+        : `Đã lưu thiết bị "${saved.alias}" vào danh sách thường gặp.`,
+    );
+    setTimeout(() => setPeerSuccess(null), 2500);
+  };
+
+  const handleStartEditPeer = (peer: PeerPreset) => {
+    setEditingPeerId(peer.id);
+    setPeerAliasInput(peer.alias);
+    setPeerProfileInput(peer.preferredRelayProfile ?? "default");
+    setPeerNotesInput(peer.notes ?? "");
+    setPeerError(null);
+  };
+
+  const handleCancelEditPeer = () => {
+    setEditingPeerId(null);
+    setPeerAliasInput("");
+    setPeerProfileInput("default");
+    setPeerNotesInput("");
+    setPeerError(null);
+  };
+
+  const handleDeletePeer = (id: string) => {
+    deletePeerPreset(id);
+    setPeers(loadPeerPresets());
+    if (editingPeerId === id) {
+      handleCancelEditPeer();
+    }
+  };
+
+  const handleQuickSend = (peer: PeerPreset) => {
+    touchPeerPreset(peer.id);
+    setPeers(loadPeerPresets());
+    if (onQuickSendToPeer) {
+      onQuickSendToPeer(peer);
+    }
+  };
+
+  const filteredPeers = useMemo(() => {
+    const q = peerSearchQuery.trim().toLowerCase();
+    if (!q) return peers;
+    return peers.filter(
+      (p) =>
+        p.alias.toLowerCase().includes(q) ||
+        (p.notes && p.notes.toLowerCase().includes(q)),
+    );
+  }, [peers, peerSearchQuery]);
 
   const filteredHistory = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -294,6 +390,201 @@ export function HistoryGroupView({
           )}
         </section>
       </div>
+
+      {/* Frequent Peer Presets Management Section */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+            <div>
+              <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
+                Thiết Bị Thường Gặp (Frequent Peers)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Lưu tên thiết bị quen thuộc (Laptop, điện thoại, máy phòng lab) để gửi nhanh chỉ với 1 chạm.
+              </p>
+            </div>
+          </div>
+
+          {peers.length > 0 && (
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={peerSearchQuery}
+                onChange={(e) => setPeerSearchQuery(e.target.value)}
+                placeholder="Tìm thiết bị…"
+                aria-label="Tìm kiếm thiết bị thường gặp"
+                className="min-h-[36px] w-48 rounded-lg border border-slate-300 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Add / Edit Peer Form */}
+        <form onSubmit={handleSavePeer} className="mt-4 rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/40">
+          <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            {editingPeerId ? "Chỉnh sửa thông tin thiết bị" : "Thêm thiết bị thường gặp mới"}
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-12">
+            <div className="sm:col-span-5">
+              <input
+                type="text"
+                maxLength={48}
+                value={peerAliasInput}
+                onChange={(e) => setPeerAliasInput(e.target.value)}
+                placeholder="Tên thiết bị (VD: Laptop ASUS Lab 302, iPhone Minh)"
+                aria-label="Tên thiết bị"
+                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </div>
+
+            <div className="sm:col-span-3">
+              <select
+                value={peerProfileInput}
+                onChange={(e) =>
+                  setPeerProfileInput(e.target.value as "default" | "public" | "local-dual")
+                }
+                aria-label="Hồ sơ Relay ưu tiên"
+                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value="default">Hồ sơ: Mặc định</option>
+                <option value="public">🌐 Public Croc Relays</option>
+                <option value="local-dual">⚡ Local Dual-Relay Lab</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-4 flex items-center gap-2">
+              <input
+                type="text"
+                maxLength={64}
+                value={peerNotesInput}
+                onChange={(e) => setPeerNotesInput(e.target.value)}
+                placeholder="Ghi chú (tùy chọn)"
+                aria-label="Ghi chú thiết bị"
+                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+              <button
+                type="submit"
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"
+              >
+                {editingPeerId ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    Lưu
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Thêm
+                  </>
+                )}
+              </button>
+              {editingPeerId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEditPeer}
+                  className="inline-flex min-h-[38px] shrink-0 items-center rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  Hủy
+                </button>
+              )}
+            </div>
+          </div>
+
+          {peerError && (
+            <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+              {peerError}
+            </p>
+          )}
+          {peerSuccess && (
+            <p role="status" className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+              {peerSuccess}
+            </p>
+          )}
+        </form>
+
+        {/* Existing Peers List */}
+        {filteredPeers.length > 0 ? (
+          <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {filteredPeers.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3 text-xs"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {p.alias}
+                    </span>
+                    {p.preferredRelayProfile && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          p.preferredRelayProfile === "local-dual"
+                            ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
+                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                      >
+                        {p.preferredRelayProfile === "local-dual" ? (
+                          <>
+                            <Zap className="h-2.5 w-2.5" aria-hidden="true" />
+                            Local Dual-Relay Lab
+                          </>
+                        ) : (
+                          "🌐 Public Croc Relays"
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                    {p.notes && <span>{p.notes}</span>}
+                    <span>Lần cuối: {formatDateTimeVi(p.lastSeen)}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickSend(p)}
+                    className="inline-flex min-h-[34px] items-center gap-1 rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 shadow-xs"
+                  >
+                    <Send className="h-3 w-3" aria-hidden="true" />
+                    Gửi nhanh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditPeer(p)}
+                    aria-label={`Sửa thiết bị ${p.alias}`}
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePeer(p.id)}
+                    aria-label={`Xóa thiết bị ${p.alias}`}
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+            {peerSearchQuery
+              ? `Không tìm thấy thiết bị nào khớp với từ khóa "${peerSearchQuery}".`
+              : "Chưa lưu thiết bị nào. Thêm các thiết bị thường xuyên chuyển tệp để gửi một chạm dễ dàng."}
+          </p>
+        )}
+      </section>
 
       {/* Transfer History Table */}
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

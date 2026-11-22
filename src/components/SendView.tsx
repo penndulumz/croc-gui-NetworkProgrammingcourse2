@@ -11,10 +11,12 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
+  Users,
   WifiOff,
   X,
   AlertCircle,
   Zap,
+  Smartphone,
 } from "lucide-react";
 import { asCodephrase, generateCode, generateOptimizedCodephrase, isCodephrase, type Codephrase } from "../protocol/croc/codephrase";
 import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
@@ -26,7 +28,12 @@ import {
   type EnhancedProgress,
 } from "../protocol/enhanced/enhanced-client";
 import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
-import { appendTransferHistory } from "../lib/history-store";
+import {
+  appendTransferHistory,
+  loadPeerPresets,
+  touchPeerPreset,
+  type PeerPreset,
+} from "../lib/history-store";
 import { formatBytes } from "../lib/format";
 import {
   RollingMetricsTracker,
@@ -50,6 +57,8 @@ export interface SendViewProps {
   prefillCode?: string;
   onClearPrefill?: () => void;
   onHistoryUpdated: () => void;
+  selectedPeer?: PeerPreset;
+  onClearSelectedPeer?: () => void;
 }
 
 type SendMode = "standard" | "enhanced";
@@ -63,6 +72,8 @@ export function SendView({
   prefillCode,
   onClearPrefill,
   onHistoryUpdated,
+  selectedPeer,
+  onClearSelectedPeer,
 }: SendViewProps) {
   const [mode, setMode] = useState<SendMode>("enhanced");
   const [payloadKind, setPayloadKind] = useState<StandardPayloadKind>("files");
@@ -77,6 +88,9 @@ export function SendView({
     host: string;
     rttMs: number;
   } | null>(null);
+
+  const [peerPresets, setPeerPresets] = useState<PeerPreset[]>(() => loadPeerPresets());
+  const [activePeer, setActivePeer] = useState<PeerPreset | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [statusText, setStatusText] = useState("");
@@ -147,6 +161,36 @@ export function SendView({
     }
     void autoGenerateCode();
   }, [prefillCode, onClearPrefill, autoGenerateCode]);
+
+  useEffect(() => {
+    if (selectedPeer) {
+      setActivePeer(selectedPeer);
+      touchPeerPreset(selectedPeer.id);
+      if (
+        selectedPeer.preferredRelayProfile &&
+        onChangeRelayProfile &&
+        selectedPeer.preferredRelayProfile !== relayProfile
+      ) {
+        onChangeRelayProfile(selectedPeer.preferredRelayProfile);
+      }
+      onClearSelectedPeer?.();
+    }
+  }, [selectedPeer, onChangeRelayProfile, relayProfile, onClearSelectedPeer]);
+
+  const handleSelectPeerPreset = (peer: PeerPreset | null) => {
+    setActivePeer(peer);
+    if (peer) {
+      touchPeerPreset(peer.id);
+      setPeerPresets(loadPeerPresets());
+      if (
+        peer.preferredRelayProfile &&
+        onChangeRelayProfile &&
+        peer.preferredRelayProfile !== relayProfile
+      ) {
+        onChangeRelayProfile(peer.preferredRelayProfile);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!busy) return;
@@ -287,6 +331,10 @@ export function SendView({
         });
 
         const totalBytes = prepared.reduce((acc, f) => acc + f.size, 0);
+        const recordedAlias = activePeer ? `${deviceAlias} → ${activePeer.alias}` : deviceAlias;
+        if (activePeer) {
+          touchPeerPreset(activePeer.id);
+        }
         appendTransferHistory({
           direction: "send",
           mode: "standard",
@@ -302,7 +350,7 @@ export function SendView({
           totalBytes,
           status: "completed",
           verifiedHash: "XXH64",
-          deviceAlias,
+          deviceAlias: recordedAlias,
         });
         onHistoryUpdated();
         setSuccessText("Đã gửi hoàn tất qua chuẩn Croc v11 (tương thích CLI & getcroc.com).");
@@ -359,6 +407,10 @@ export function SendView({
         },
       });
 
+      const recordedAlias = activePeer ? `${deviceAlias} → ${activePeer.alias}` : deviceAlias;
+      if (activePeer) {
+        touchPeerPreset(activePeer.id);
+      }
       appendTransferHistory({
         direction: "send",
         mode: "enhanced",
@@ -374,7 +426,7 @@ export function SendView({
         verifiedHash: "SHA-256",
         resumedChunks: res.resumedChunks,
         failoverTriggered: res.failoverRerouted > 0,
-        deviceAlias,
+        deviceAlias: recordedAlias,
       });
       onHistoryUpdated();
       setSuccessText(
@@ -780,6 +832,102 @@ export function SendView({
             )}
           </div>
         )}
+
+        {/* Frequent Peer Preset Quick-Select */}
+        <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                Người nhận / Thiết bị đích (Recipient Peer)
+              </span>
+            </div>
+            {activePeer && (
+              <button
+                type="button"
+                onClick={() => handleSelectPeerPreset(null)}
+                className="inline-flex items-center gap-1 text-xs text-rose-600 hover:underline dark:text-rose-400"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+                Bỏ chọn ({activePeer.alias})
+              </button>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              value={activePeer?.id ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                const found = peerPresets.find((p) => p.id === val);
+                handleSelectPeerPreset(found ?? null);
+              }}
+              className="min-h-[36px] rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+              aria-label="Chọn thiết bị nhận thường gặp"
+            >
+              <option value="">-- Chọn thiết bị thường gặp --</option>
+              {peerPresets.map((peer) => (
+                <option key={peer.id} value={peer.id}>
+                  {peer.alias} {peer.preferredRelayProfile === "local-dual" ? "(⚡ Local Lab)" : ""}
+                  {peer.notes ? ` · ${peer.notes}` : ""}
+                </option>
+              ))}
+            </select>
+
+            {/* Quick Chips for Top Frequent Peers */}
+            {peerPresets.slice(0, 4).map((peer) => {
+              const isSelected = activePeer?.id === peer.id;
+              return (
+                <button
+                  key={peer.id}
+                  type="button"
+                  onClick={() => handleSelectPeerPreset(isSelected ? null : peer)}
+                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    isSelected
+                      ? "border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-400 dark:bg-teal-950/80 dark:text-teal-200"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <Smartphone className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                  <span>{peer.alias}</span>
+                  {peer.preferredRelayProfile === "local-dual" && (
+                    <span className="rounded bg-teal-200/60 px-1 text-[10px] font-semibold text-teal-900 dark:bg-teal-900 dark:text-teal-200">
+                      ⚡ Lab
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {peerPresets.length === 0 && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Chưa có thiết bị thường gặp nào được lưu. Bạn có thể lưu thiết bị trong thẻ Lịch sử.
+              </span>
+            )}
+          </div>
+
+          {activePeer && (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50/60 p-2.5 text-xs text-teal-900 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-200">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                <span>
+                  Đã nhắm người nhận: <strong>{activePeer.alias}</strong>
+                  {activePeer.notes ? ` (${activePeer.notes})` : ""}
+                </span>
+              </div>
+              {activePeer.preferredRelayProfile && (
+                <span className="text-[11px] text-teal-700 dark:text-teal-300">
+                  Hồ sơ relay ưu tiên:{" "}
+                  <strong>
+                    {activePeer.preferredRelayProfile === "local-dual"
+                      ? "Local Dual-Relay Lab"
+                      : "Public Croc Relays"}
+                  </strong>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Codephrase + QR Share Row */}
         <div className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-[1fr_auto] dark:border-slate-800">
