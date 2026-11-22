@@ -1,78 +1,158 @@
-# Cẩm Nang Kiến Thức Mạng Máy Tính Từ Con Số 0 (Dành Cho Nhóm Phát Triển CrocFlow)
+# Cẩm Nang Kiến Thức Mạng Máy Tính Cho Truyền Tệp Bảo Mật
 
-Tài liệu này giải thích từng khái niệm mạng máy tính đằng sau **CrocFlow** bằng tiếng Việt dễ hiểu, giúp thành viên mới chưa có nền tảng lập trình mạng vẫn nắm chắc bản chất và trả lời tự tin trước giảng viên.
-
----
-
-## 1. Tại sao hai máy tính không thể "nhìn thấy nhau" trực tiếp trên Internet? (NAT & Tường lửa)
-
-Khi bạn kết nối Wi-Fi ở trường hoặc ở nhà:
-- Router Wi-Fi cấp cho điện thoại và laptop của bạn các địa chỉ **IP nội bộ (Private IP)** như `192.168.1.5` hay `10.0.0.12`.
-- Toàn bộ mạng Wi-Fi chia sẻ chung một **IP công cộng (Public IP)** thông qua cơ chế **NAT (Network Address Translation)**.
-- Nếu bạn ở ký túc xá muốn gửi tệp sang máy giảng viên đang dùng 4G, máy bạn không thể tự mở kết nối TCP trực tiếp tới `192.168.1.5` của thầy vì tường lửa NAT sẽ chặn mọi kết nối lạ đi vào.
-
-### Giải pháp của Croc & CrocFlow: Relay Server
-- Cả **Máy Gửi (Sender)** và **Máy Nhận (Receiver)** đều chủ động mở kết nối **đi ra (outbound)** tới cùng một **Relay Server** có IP công cộng (luôn được tường lửa cho phép).
-- Hai máy báo cùng một tên **Phòng (Room)** được dẫn xuất từ mã bí mật (`Codephrase`).
-- Relay Server ghép cặp 2 kết nối cùng phòng và làm "ống dẫn" chuyển tiếp byte qua lại.
+> Tài liệu kỹ thuật chi tiết phân tích bản chất các tầng mạng, bắt tay mật mã và cơ chế truyền file phân tán trong **CrocFlow**.
 
 ---
 
-## 2. Tại sao trình duyệt Web / App PWA cần Bridge Server (`/ws`)?
+## 1. Bản Chất Mạng Máy Tính: Vì Sao Hai Thiết Bị Không Thể Tự Nối Với Nhau Trực Tiếp?
 
-- **Trình duyệt Web** vì lý do bảo mật không cho phép JavaScript mở kết nối **TCP thuần (Raw TCP Socket)** trực tiếp tới cổng `9009` của `croc relay`. Trình duyệt chỉ được phép mở **HTTP** và **WebSocket (`ws://` / `wss://`)**.
-- Vì vậy, CrocFlow chạy kèm một **Bridge Server** gọn nhẹ (`server.ts`):
-  1. Trình duyệt mở WebSocket tới `/ws?relay=<index>&port=<port>`.
-  2. Bridge Server kiểm tra **Danh sách trắng (Allowlist)** trong `server/bridge-allowlist.ts` — chỉ cho phép nối tới đúng cụm Croc Relay chính thức và đúng dải cổng `9009–9013`, đồng thời **chặn toàn bộ IP nội bộ (RFC1918, loopback, cloud metadata)** để chống lỗ hổng **SSRF**.
-  3. Sau khi vượt kiểm tra, Bridge Server nối ống hai chiều giữa WebSocket và TCP Socket tới Croc Relay.
-  4. Nhờ đó, **CrocFlow tương thích 100% ở mức byte** với công cụ dòng lệnh `croc` CLI và `getcroc.com`.
+### Mạng Nội Bộ (Private Subnet) và Cơ Chế NAT (Network Address Translation)
+Khi điện thoại hoặc laptop của bạn kết nối Wi-Fi tại nhà riêng, trường học hoặc văn phòng:
+- Router Wi-Fi cấp cho thiết bị của bạn một địa chỉ **IP nội bộ (Private IP)** theo chuẩn RFC 1918 (ví dụ: `192.168.1.15` hoặc `10.0.4.88`).
+- Các địa chỉ IP nội bộ này **không thể định tuyến trực tiếp trên Internet công cộng**.
+- Toàn bộ thiết bị trong mạng Wi-Fi cùng dùng chung một địa chỉ **IP công cộng duy nhất (Public IP)** do nhà mạng ISP cung cấp.
+- Khi bạn mở trình duyệt tải trang web, router thực hiện cơ chế **NAT (Network Address Translation)**: ghi nhớ cổng mở chiều ra, dịch địa chỉ gói tin và chuyển dữ liệu trả về đúng máy của bạn.
 
----
+```
+[ Máy Gửi (Hà Nội) ] (IP Nội bộ: 192.168.1.15)
+        │ Mở kết nối đi ra (Outbound)
+        ▼
+   [ Router NAT / Firewall ] (IP Công cộng: 203.0.113.42)
+        │
+   ═══════════════════════════════════════════ (Internet Công cộng)
+        │
+   [ Router NAT / Firewall ] (IP Công cộng: 198.51.100.99)
+        ▲
+        │ Bị chặn! (Tường lửa chặn kết nối lạ từ ngoài vào)
+[ Máy Nhận (TP.HCM) ] (IP Nội bộ: 192.168.0.22)
+```
 
-## 3. Mã hóa Đầu Cuối Zero-Knowledge (PAKE + HKDF + AES-256-GCM)
+### Rào Cản Kết Nối Đi Vào (Inbound Connection Block)
+Nếu một máy ở Hà Nội muốn gửi tệp trực tiếp sang máy ở TP.HCM:
+1. Máy gửi không thể nối tới `192.168.0.22` vì địa chỉ này chỉ tồn tại trong mạng LAN của máy nhận.
+2. Máy gửi cũng không thể nối tới IP công cộng của router máy nhận (`198.51.100.99`) vì tường lửa (Firewall) sẽ lập tức hủy bỏ (Drop) mọi gói tin TCP SYN từ bên ngoài tự ý đi vào.
 
-Câu hỏi giảng viên hay hỏi nhất: *"Đi qua Relay trung gian như vậy thì chủ Relay có đọc trộm được tệp của sinh viên không?"*
-
-**Câu trả lời là KHÔNG**, nhờ 3 tầng mật mã chạy hoàn toàn trên máy người dùng:
-
-1. **PAKE / ECDH trên đường cong Elliptic P-256:**
-   - Hai máy trao đổi khóa công khai tạm thời (ephemeral key) và kết hợp với **Codephrase** bí mật (`src/protocol/croc/pake.ts` cho Chuẩn v11 và `src/protocol/enhanced/enhanced-client.ts` cho Chế độ Nâng cao).
-   - **Codephrase KHÔNG BAO GIỜ được gửi nguyên văn qua mạng.**
-2. **HKDF-SHA-256 (Key Derivation Function):**
-   - Từ bí mật chung sau PAKE/ECDH + muối ngẫu nhiên (`salt`), cả hai máy độc lập dẫn xuất ra:
-     - Khóa mã hóa phiên **256-bit** cho AES-GCM.
-     - Hai thẻ xác nhận 2 chiều (`confirmA`, `confirmB`) để chắc chắn cả hai bên đều gõ đúng cùng một Codephrase trước khi gửi bất kỳ thông tin tệp nào.
-3. **AES-256-GCM (Authenticated Encryption):**
-   - Mọi tên tệp, Folder Manifest, văn bản và từng mảnh Chunk đều bị mã hóa bằng AES-256-GCM kèm vector khởi tạo (IV 12 byte) ngẫu nhiên cho từng gói.
-   - GCM vừa **mã hóa (bảo mật)** vừa gắn **thẻ xác thực (chống sửa đổi gói tin trên đường truyền)**.
-
----
-
-## 4. Cắt mảnh Chunk, Folder Manifest SHA-256 & IndexedDB Resume Cache
-
-Trong truyền tệp truyền thống, nếu gửi một thư mục 500 MB và rớt mạng ở 90%, bạn phải gửi lại từ đầu.
-
-**CrocFlow Chế độ Nâng cao giải quyết triệt để bằng:**
-- **Folder Manifest (`src/protocol/enhanced/manifest.ts`):** Trước khi truyền, máy gửi liệt kê toàn bộ cấu trúc đường dẫn tương đối (được làm sạch bởi `sanitizeRelativePath` để chặn tấn công leo thư mục `../`), cắt mỗi tệp thành các **Chunk** (16 KB / 64 KB / 256 KB) và tính mã băm **SHA-256** cho từng Chunk và từng tệp.
-- **Resume Cache (`src/protocol/enhanced/resume-cache.ts`):** Mỗi khi máy nhận giải mã một Chunk và thấy mã băm SHA-256 khớp 100%, Chunk đó được lưu ngay vào cơ sở dữ liệu cục bộ **IndexedDB** của trình duyệt/app.
-- **Khôi phục thông minh & phát hiện tệp mới (`computeResumePlan`):** Khi mạng có lại (kể cả khi người gửi vừa bỏ thêm tệp mới vào thư mục), máy nhận đối chiếu Manifest mới với IndexedDB, đánh dấu các Chunk đã có là `Resume Cache` (bỏ qua không tải lại) và chỉ yêu cầu gửi các Chunk còn thiếu hoặc thuộc tệp mới.
+### Giải Pháp Rendezvous Relay của Croc & CrocFlow
+Thay vì bắt người dùng phải cấu hình mở cổng router (Port Forwarding) hoặc dùng các kỹ thuật xuyên NAT phức tạp dễ lỗi:
+1. Cả **Máy Gửi** và **Máy Nhận** đều chủ động mở kết nối **chiều đi ra (Outbound)** tới cùng một **Relay Server** có IP công cộng sẵn sàng trên Internet.
+2. Các kết nối chiều đi ra luôn được router NAT và tường lửa cho phép 100%.
+3. Hai máy báo cùng tên **Phòng (Room)** được tính toán toán học từ mật khẩu bí mật chung (`Codephrase`).
+4. Relay Server đóng vai trò chiếc "ống dẫn", chuyển tiếp luồng dữ liệu nhị phân giữa hai máy.
 
 ---
 
-## 5. Truyền song song qua 2 Relay (Dual-Relay) & Tự động Failover
+## 2. Rào Cản Sandbox Trình Duyệt: WebSockets vs. TCP Thuần (Raw TCP)
 
-Đây là yêu cầu mạng trọng tâm nâng cao:
-- Thay vì đẩy 100% lưu lượng qua 1 đường ống duy nhất, CrocFlow mở **2 kênh WebSocket độc lập** tới **Relay Alpha** và **Relay Beta** (`server/local-dual-relay.ts`).
-- Bộ lập lịch `DualRelayScheduler` (`src/protocol/enhanced/dual-relay-scheduler.ts`) phân luồng theo chỉ số Chunk:
-  - **Chunk chẵn (`0, 2, 4, 6...`)** → đi qua **Relay Alpha**.
-  - **Chunk lẻ (`1, 3, 5, 7...`)** → đi qua **Relay Beta**.
-- **Chịu lỗi tự động (Automatic Failover):**
-  - Nếu giữa phiên truyền Relay Alpha bị ngắt (hoặc bạn bấm nút **"Mô phỏng ngắt Relay Alpha (Failover)"** để trình diễn cho giảng viên), `DualRelayScheduler.triggerAlphaFailover()` ngay lập tức chuyển toàn bộ các Chunk chẵn đang chờ hoặc đang bay sang hàng đợi của **Relay Beta**.
-  - Máy nhận tự động khử trùng lặp (deduplicate), kiểm tra SHA-256 từng Chunk, ghép đủ file gốc 100% không sai một bit.
+### Tại Sao JavaScript Trên Trình Duyệt Không Mở Được TCP Thuần?
+Trình duyệt web hoạt động trong môi trường sandbox cô lập cực kỳ nghiêm ngặt:
+- Nếu JavaScript được mở socket TCP tùy ý, một trang web độc hại có thể quét cổng mạng nội bộ của bạn, tấn công máy in văn phòng hoặc điều khiển thiết bị IoT trong nhà.
+- Vì vậy, JavaScript trên trình duyệt chỉ được phép mở kết nối **HTTP/HTTPS** và **WebSocket (`ws://` / `wss://`)**.
+- Tuy nhiên, cụm máy chủ Relay chính thức của Go `croc` lại lắng nghe trên cổng **TCP thuần** (`9009–9013`).
+
+### Cầu Nối Bridge Server An Toàn (`/ws`)
+Để ứng dụng web và di động có thể kết nối mượt mà vào hệ sinh thái Croc mà không cần cài đặt phần mềm Go WASM cồng kềnh:
+1. Trình duyệt kết nối WebSocket tới Bridge Server tích hợp (`server.ts`):
+   `ws://localhost:3000/ws?relay=0&port=9009`
+2. **Bộ lọc Chống Tấn Công SSRF (`server/bridge-allowlist.ts`)**:
+   - Bridge Server tuyệt đối không nhận địa chỉ IP hay host tùy ý từ client.
+   - Chỉ nhận chỉ số số nguyên (`relay=0..3`) ánh xạ tới danh sách trắng máy chủ Croc chính thức (`CROC_RELAY_HOSTS`).
+   - Lọc bỏ hoàn toàn địa chỉ loopback (`127.0.0.1`), dải IP nội bộ RFC 1918 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) và IP metadata đám mây (`169.254.169.254`).
+3. Sau khi xác thực an toàn, Bridge Server nối ống dữ liệu hai chiều giữa WebSocket của trình duyệt và kết nối TCP tới Croc Relay.
+4. **Kết quả**: Tương thích byte-for-byte 100% với công cụ dòng lệnh `croc` CLI gốc.
 
 ---
 
-## 6. Passphrase Nhóm Xoay Vòng Hàng Tháng (`YYYY-MM`)
+## 3. Mật Mã Học Đầu Cuối Zero-Knowledge (PAKE + HKDF + AES-256-GCM)
 
-- Module `src/lib/group-passphrase.ts` cho phép nhóm đồ án thống nhất duy nhất một khóa gốc chung (`secretSeed`).
-- Mỗi tháng, thuật toán `HKDF-SHA-256(secretSeed, "YYYY-MM")` tự động dẫn xuất ra một **Codephrase 3 từ chuẩn EFF** hoàn toàn mới nhưng **giống hệt nhau trên mọi máy của các thành viên trong nhóm** — vừa tiện lợi vừa giới hạn thời gian hiệu lực khóa theo tháng.
+### Câu Hỏi Lớn Về Bảo Mật
+> *"Dữ liệu đi qua máy chủ Relay trung gian như vậy, liệu người quản trị Relay có đọc trộm hoặc sửa đổi được tệp của chúng ta không?"*
+
+**Câu trả lời là TUYỆT ĐỐI KHÔNG.** CrocFlow sử dụng bộ 3 tầng mật mã thực thi 100% phía máy khách:
+
+```
+[ Thiết Bị Gửi ]                                                 [ Thiết Bị Nhận ]
+       │                                                                  │
+       ├──────────────── Khóa Công Khai Tạm Thời (P-256) ─────────────────┤
+       │                          + Che Khóa Bằng PAKE                    │
+       ▼                                                                  ▼
+[ Tính Điểm Bí Mật Chung ]                                       [ Tính Điểm Bí Mật Chung ]
+       │                                                                  │
+       ▼                                                                  ▼
+[ Hàm Dẫn Xuất HKDF-SHA-256 ]                                    [ Hàm Dẫn Xuất HKDF-SHA-256 ]
+       ├──────────────► Khóa Phiên AES-256-GCM ◄──────────────────────────┤
+       ├──────────────► Thẻ Xác Nhận confirmA / confirmB ◄────────────────┤
+       ▼                                                                  ▼
+[ Xác Nhận Hai Chiều Khớp ] ◄────── Kiểm Tra Đối Chiếu ────────► [ Xác Nhận Hai Chiều Khớp ]
+       │                                                                  │
+       ▼                                                                  ▼
+[ Mã Hóa Từng Chunk GCM ] ═════════ Luồng Bản Mã ══════════════► [ Giải Mã Từng Chunk GCM ]
+```
+
+### 1. Thuật Toán Bắt Tay Khóa PAKE v2 Trên Đường Cong NIST P-256
+Thuật toán Diffie-Hellman thông thường cho phép hai bên thỏa thuận khóa bí mật qua kênh không an toàn, nhưng rất dễ bị tấn công xen giữa (Man-in-the-Middle) nếu không có chứng chỉ số.
+- **PAKE v2 (Password Authenticated Key Exchange)** kết hợp cặp khóa tạm thời trên đường cong elliptic P-256 với mã băm của mật khẩu chung (Codephrase).
+- Mật khẩu Codephrase **không bao giờ được gửi nguyên văn qua mạng**.
+- Kẻ tấn công nghe lén trên đường truyền hoặc chính quản trị viên Relay không thể giải mã hoặc thử mật khẩu ngoại tuyến (offline dictionary attack) vì các điểm công khai đã được làm mờ toán học.
+
+### 2. Hàm Dẫn Xuất Khóa HKDF-SHA-256
+Sau khi tính được điểm bí mật chung, cả hai bên truyền điểm đó qua hàm HKDF cùng một chuỗi muối (`salt`) ngẫu nhiên 32-byte:
+- Sinh ra **khóa đối xứng 256-bit** dùng cho thuật toán AES-GCM.
+- Sinh ra hai thẻ xác nhận hai chiều (`confirmA` và `confirmB`). Hai bên đối chiếu hai thẻ này trước khi gửi dữ liệu tệp, đảm bảo cả hai đều nhập chính xác cùng một mã Codephrase.
+
+### 3. Mã Hóa Xác Thực AES-256-GCM (Authenticated Encryption)
+- Mọi gói tin nhị phân và từng mảnh Chunk đều được mã hóa bằng **AES-256-GCM**.
+- Mỗi gói tin sử dụng một vector khởi tạo (IV 12-byte) ngẫu nhiên hoàn toàn riêng biệt.
+- GCM cung cấp cơ chế **AEAD**: nếu Relay hoặc tin tặc cố tình can thiệp sửa đổi dù chỉ 1 bit, thẻ xác thực (Auth Tag 16-byte) ở phía nhận sẽ lập tức báo lỗi và socket bị ngắt ngay lập tức, ngăn ngừa hoàn toàn dữ liệu rác.
+
+---
+
+## 4. Cắt Mảnh Chunk, Folder Manifest và Bộ Nhớ Đệm IndexedDB Resume
+
+### Hạn Chế Của Luồng Truyền Truyền Thống
+Khi truyền một thư mục chứa hàng trăm tệp hoặc một tệp lớn 2 GB qua một luồng duy nhất, nếu mạng bị đứt ở 98%, bạn phải tải lại toàn bộ từ con số 0.
+
+### Giải Pháp Đột Phá Của CrocFlow:
+1. **Folder Manifest (`manifest.ts`)**:
+   - Máy gửi quét toàn bộ thư mục, làm sạch đường dẫn bằng `sanitizeRelativePath` (chặn triệt để tấn công leo thư mục `../../etc/passwd`).
+   - Cắt các tệp thành các **Chunk** có kích thước cố định (mặc định 64 KB).
+   - Tính mã băm SHA-256 cho từng Chunk riêng biệt và mã băm toàn phần cho từng tệp.
+2. **Bộ Nhớ Đệm Khôi Phục IndexedDB (`resume-cache.ts`)**:
+   - Khi máy nhận giải mã và xác thực mã băm SHA-256 của từng Chunk thành công, Chunk đó được ghi ngay vào cơ sở dữ liệu `crocflow-resume-db` của trình duyệt.
+3. **Tiếp Tục Tải Thông Minh (`computeResumePlan`)**:
+   - Khi có kết nối lại, máy nhận đối chiếu Manifest mới với dữ liệu đang có trong IndexedDB.
+   - Các Chunk đã có sẵn được đánh dấu là `Resume Cache` và bỏ qua không tải lại.
+   - Nếu trong lúc mất mạng, người gửi bỏ thêm tệp mới vào thư mục, CrocFlow tự động nhận diện và chỉ truyền đúng các phần dữ liệu còn thiếu.
+
+---
+
+## 5. Truyền Song Song 2 Relay (Dual-Relay) & Tự Động Chuyển Lỗi (Failover)
+
+### Chia Tải Qua Hai Đường Ống Mạng
+Nhằm tối đa hóa băng thông và không phụ thuộc vào một máy chủ duy nhất:
+- CrocFlow mở đồng thời 2 kênh WebSocket độc lập:
+  - **Relay Alpha**: Phụ trách các Chunk có chỉ số chẵn (`0, 2, 4, 6, ...`)
+  - **Relay Beta**: Phụ trách các Chunk có chỉ số lẻ (`1, 3, 5, 7, ...`)
+
+```
+Máy Gửi ──────────► Chunk 0 (Chẵn) ──────────► [ Relay Alpha ] ──────────► Máy Nhận
+        ──────────► Chunk 1 (Lẻ)   ──────────► [ Relay Beta  ] ──────────►
+        ──────────► Chunk 2 (Chẵn) ──────────► [ Relay Alpha ] ──────────►
+        ──────────► Chunk 3 (Lẻ)   ──────────► [ Relay Beta  ] ──────────►
+```
+
+### Cơ Chế Tự Động Chuyển Lỗi (Failover)
+Nếu Relay Alpha gặp sự cố mất mạng hoặc sập phòng giữa phiên truyền:
+1. Máy trạng thái `DualRelayScheduler` phát hiện socket của Relay Alpha bị đóng hoặc gửi lỗi.
+2. Hệ thống gọi ngay hàm `triggerAlphaFailover()`.
+3. Toàn bộ các Chunk chẵn chưa được xác nhận hoàn tất lập tức được chuyển sang hàng đợi phát của **Relay Beta**.
+4. Máy nhận sắp xếp các Chunk theo đúng chỉ số tuần tự (`globalIndex`), khử trùng lặp các gói tin đến muộn và xác nhận mã băm SHA-256 cuối cùng. Dữ liệu bảo toàn 100%, không cần truyền lại từ đầu.
+
+---
+
+## 6. Passphrase Nhóm Xoay Vòng Tự Động Hàng Tháng (`YYYY-MM`)
+
+Các nhóm làm việc thường xuyên cần một mã dùng chung mà không muốn phải gửi lại mật mã mỗi ngày:
+- CrocFlow tính toán mã bí mật theo công thức:
+  $$\text{CodeTháng} = \text{HKDF-SHA-256}(\text{KhóaGốc}, \text{"YYYY-MM"})$$
+- Các byte dẫn xuất được ánh xạ sang từ điển ngắn EFF để sinh ra mã 3 từ tự nhiên.
+- Sang ngày đầu tiên của tháng mới, tất cả thiết bị của các thành viên tự động xoay sang mã bảo mật mới mà không cần can thiệp thủ công.

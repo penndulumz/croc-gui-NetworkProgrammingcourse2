@@ -15,6 +15,8 @@ import {
   type InspectorSnapshot,
 } from "../protocol/event-bus";
 import { downloadTextFile, formatBytes, formatSpeed, formatTimeShort } from "../lib/format";
+import type { Locale } from "../lib/i18n";
+import { getTranslations } from "../lib/i18n";
 
 const CHUNK_COLOR: Record<ChunkVisualState, string> = {
   pending: "bg-slate-200 dark:bg-slate-800",
@@ -25,7 +27,7 @@ const CHUNK_COLOR: Record<ChunkVisualState, string> = {
   failover: "bg-amber-500 dark:bg-amber-400",
 };
 
-const CHUNK_TITLE: Record<ChunkVisualState, string> = {
+const CHUNK_TITLE_VI: Record<ChunkVisualState, string> = {
   pending: "Chờ gửi",
   alpha: "Đang đi qua Relay Alpha (Chẵn)",
   beta: "Đang đi qua Relay Beta (Lẻ)",
@@ -34,11 +36,26 @@ const CHUNK_TITLE: Record<ChunkVisualState, string> = {
   failover: "Failover — chuyển hướng từ Alpha sang Beta",
 };
 
-function ThroughputSparkline({ samples }: { samples: InspectorSnapshot["throughputHistory"] }) {
+const CHUNK_TITLE_EN: Record<ChunkVisualState, string> = {
+  pending: "Pending dispatch",
+  alpha: "Streaming via Relay Alpha (Even)",
+  beta: "Streaming via Relay Beta (Odd)",
+  verified: "Verified SHA-256 / XXH64",
+  resumed: "Skipped — Cached in IndexedDB",
+  failover: "Failover — Rerouted from Alpha to Beta",
+};
+
+function ThroughputSparkline({
+  samples,
+  emptyText,
+}: {
+  samples: InspectorSnapshot["throughputHistory"];
+  emptyText: string;
+}) {
   if (samples.length < 2) {
     return (
       <div className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-200 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        Biểu đồ thông lượng (Throughput) sẽ vẽ khi có luồng dữ liệu
+        {emptyText}
       </div>
     );
   }
@@ -58,7 +75,7 @@ function ThroughputSparkline({ samples }: { samples: InspectorSnapshot["throughp
       viewBox={`0 0 ${width} ${height}`}
       className="h-16 w-full overflow-visible rounded-lg bg-slate-50 px-1 dark:bg-slate-950/60"
       role="img"
-      aria-label="Biểu đồ tốc độ truyền theo thời gian thực"
+      aria-label="Throughput sparkline graph"
     >
       <polyline
         fill="none"
@@ -73,51 +90,87 @@ function ThroughputSparkline({ samples }: { samples: InspectorSnapshot["throughp
   );
 }
 
-export function ProtocolInspector() {
+export interface ProtocolInspectorProps {
+  locale?: Locale;
+}
+
+/**
+ * Real-time Protocol Inspector component.
+ * Visualizes 5-step cryptographic PAKE/ECDH handshake milestones,
+ * concurrent chunk allocation matrix across Relay Alpha and Relay Beta,
+ * rolling throughput sparkline, and live diagnostic event logs.
+ */
+export function ProtocolInspector({ locale = "vi" }: ProtocolInspectorProps) {
   const [snap, setSnap] = useState<InspectorSnapshot>(() => protocolEventBus.getSnapshot());
+  const t = getTranslations(locale);
+  const titles = locale === "vi" ? CHUNK_TITLE_VI : CHUNK_TITLE_EN;
 
   useEffect(() => {
     return protocolEventBus.subscribe(setSnap);
   }, []);
 
   const handleExportMarkdown = () => {
-    const lines = [
-      "# Báo cáo Soi Giao Thức CrocFlow (Protocol Inspector Log)",
-      "",
-      `- **Session ID:** ${snap.sessionId ?? "Chưa có phiên"}`,
-      `- **Chế độ:** ${snap.mode === "enhanced" ? "Nâng cao (Folder Manifest · Dual-Relay)" : snap.mode === "standard" ? "Chuẩn Croc v11" : "N/A"}`,
-      `- **Hướng:** ${snap.direction ?? "N/A"}`,
-      `- **Tổng dung lượng:** ${formatBytes(snap.bytesTransferred)} / ${formatBytes(snap.totalBytes)}`,
-      `- **Phân bổ Chunk:** Tổng ${snap.totalChunks} · Alpha (Chẵn): ${snap.alphaChunks} · Beta (Lẻ): ${snap.betaChunks} · Resume Cache: ${snap.resumedChunks} · Failover: ${snap.failoverChunks}`,
-      "",
-      "## 1. Tiến trình bắt tay mật mã (PAKE / ECDH + AES-256-GCM)",
-      ...snap.pakeSteps.map((s) => `- [${s.status === "done" ? "x" : " "}] ${s.label} (${s.status})`),
-      "",
-      "## 2. Nhật ký sự kiện trực tiếp",
-      ...snap.events.map(
-        (ev) => `- \`${formatTimeShort(ev.timestamp)}\` **[${ev.kind.toUpperCase()}]** ${ev.title} — ${ev.detail}`,
-      ),
-    ];
+    const isVi = locale === "vi";
+    const lines = isVi
+      ? [
+          "# Báo cáo Soi Giao Thức CrocFlow (Protocol Inspector Log)",
+          "",
+          `- **Session ID:** ${snap.sessionId ?? "Chưa có phiên"}`,
+          `- **Chế độ:** ${snap.mode === "enhanced" ? "Nâng cao (Folder Manifest · Dual-Relay)" : snap.mode === "standard" ? "Chuẩn Croc v11" : "N/A"}`,
+          `- **Hướng:** ${snap.direction ?? "N/A"}`,
+          `- **Tổng dung lượng:** ${formatBytes(snap.bytesTransferred)} / ${formatBytes(snap.totalBytes)}`,
+          `- **Phân bổ Chunk:** Tổng ${snap.totalChunks} · Alpha (Chẵn): ${snap.alphaChunks} · Beta (Lẻ): ${snap.betaChunks} · Resume Cache: ${snap.resumedChunks} · Failover: ${snap.failoverChunks}`,
+          "",
+          "## 1. Tiến trình bắt tay mật mã (PAKE / ECDH + AES-256-GCM)",
+          ...snap.pakeSteps.map((s) => `- [${s.status === "done" ? "x" : " "}] ${s.label} (${s.status})`),
+          "",
+          "## 2. Nhật ký sự kiện trực tiếp",
+          ...snap.events.map(
+            (ev) => `- \`${formatTimeShort(ev.timestamp)}\` **[${ev.kind.toUpperCase()}]** ${ev.title} — ${ev.detail}`,
+          ),
+        ]
+      : [
+          "# CrocFlow Protocol Inspector Audit Log",
+          "",
+          `- **Session ID:** ${snap.sessionId ?? "None"}`,
+          `- **Protocol Mode:** ${snap.mode === "enhanced" ? "Enhanced (Folder Manifest · Dual-Relay)" : snap.mode === "standard" ? "Standard Croc v11" : "N/A"}`,
+          `- **Direction:** ${snap.direction ?? "N/A"}`,
+          `- **Transfer Volume:** ${formatBytes(snap.bytesTransferred)} / ${formatBytes(snap.totalBytes)}`,
+          `- **Chunk Distribution:** Total ${snap.totalChunks} · Alpha (Even): ${snap.alphaChunks} · Beta (Odd): ${snap.betaChunks} · Resume Cache: ${snap.resumedChunks} · Failover: ${snap.failoverChunks}`,
+          "",
+          "## 1. Cryptographic Handshake Milestones (PAKE / ECDH + AES-256-GCM)",
+          ...snap.pakeSteps.map((s) => `- [${s.status === "done" ? "x" : " "}] ${s.label} (${s.status})`),
+          "",
+          "## 2. Live Diagnostic Event Log",
+          ...snap.events.map(
+            (ev) => `- \`${formatTimeShort(ev.timestamp)}\` **[${ev.kind.toUpperCase()}]** ${ev.title} — ${ev.detail}`,
+          ),
+        ];
+
     downloadTextFile(`crocflow-inspector-${Date.now()}.md`, lines.join("\n"));
   };
 
   return (
     <aside
-      aria-label="Bảng soi giao thức mạng trực tiếp"
-      className="flex flex-col rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+      aria-label={t.inspector.title}
+      className="flex flex-col rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/80 dark:bg-[#111827]/95 backdrop-blur-md"
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3.5 dark:border-slate-800">
-        <div className="flex items-center gap-2 min-w-0">
-          <Activity className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3.5 dark:border-slate-800/80">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
+            <Activity className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </div>
           <div className="min-w-0">
-            <h2 className="font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Bảng soi giao thức
+            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+              {t.inspector.title}
             </h2>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400 font-mono">
               {snap.sessionId
-                ? `${snap.mode === "enhanced" ? "Dual-Relay" : "Croc v11"} · ${snap.active ? "Đang chạy" : "Hoàn tất"}`
-                : "Dữ liệu thật từ engine"}
+                ? `${snap.mode === "enhanced" ? "Dual-Relay" : "Croc v11"} · ${snap.active ? (locale === "vi" ? "Đang chạy" : "Active") : (locale === "vi" ? "Hoàn tất" : "Idle")}`
+                : locale === "vi"
+                  ? "Dữ liệu thật từ engine"
+                  : "Live protocol engine stream"}
             </p>
           </div>
         </div>
@@ -126,17 +179,19 @@ export function ProtocolInspector() {
             type="button"
             onClick={handleExportMarkdown}
             disabled={snap.events.length === 0}
-            aria-label="Xuất log giao thức Markdown"
-            className="inline-flex min-h-[34px] shrink-0 whitespace-nowrap items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            aria-label={t.inspector.exportLogBtn}
+            title={t.inspector.exportLogBtn}
+            className="inline-flex min-h-[34px] shrink-0 whitespace-nowrap items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
           >
             <Download className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>Xuất Log</span>
+            <span>{locale === "vi" ? "Xuất Log" : "Export"}</span>
           </button>
           <button
             type="button"
             onClick={() => protocolEventBus.reset()}
-            aria-label="Đặt lại bảng soi giao thức"
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            aria-label="Reset Inspector"
+            title="Reset"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -147,10 +202,10 @@ export function ProtocolInspector() {
         {/* 1. PAKE / Encryption Handshake Timeline */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              1. Bắt tay mã hóa E2E
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {locale === "vi" ? "1. Bắt tay mã hóa E2E" : "1. Cryptographic Handshake"}
             </h3>
-            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
               Zero-Knowledge
             </span>
@@ -196,10 +251,12 @@ export function ProtocolInspector() {
         {/* 2. Chunk Allocation Map */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              2. Bản đồ phân bổ Chunk ({snap.totalChunks})
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {locale === "vi"
+                ? `2. Bản đồ phân bổ Chunk (${snap.totalChunks})`
+                : `2. Chunk Allocation Matrix (${snap.totalChunks})`}
             </h3>
-            <span className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+            <span className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400 font-semibold">
               Alpha {snap.alphaChunks} · Beta {snap.betaChunks}
             </span>
           </div>
@@ -207,38 +264,40 @@ export function ProtocolInspector() {
           {snap.chunkStates.length > 0 ? (
             <div
               data-testid="chunk-grid"
-              className="grid grid-cols-12 gap-1 rounded-lg bg-slate-50 p-2 dark:bg-slate-950/60"
+              className="grid grid-cols-12 gap-1 rounded-xl bg-slate-50 p-2 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800"
             >
               {snap.chunkStates.map((st, idx) => (
                 <div
                   key={idx}
-                  title={`Chunk #${idx}: ${CHUNK_TITLE[st]}`}
+                  title={`Chunk #${idx}: ${titles[st]}`}
                   className={`h-3.5 rounded-[3px] transition-colors ${CHUNK_COLOR[st]}`}
                 />
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              Chưa có Chunk nào được lập lịch. Hãy gửi tệp hoặc chạy Demo 2 Relay để quan sát phân luồng Chẵn / Lẻ.
+            <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              {locale === "vi"
+                ? "Chưa có Chunk nào được lập lịch. Hãy gửi tệp hoặc chạy Demo để quan sát phân luồng Chẵn / Lẻ."
+                : "No active chunks scheduled yet. Start a transfer or run a live demo to inspect even/odd streaming."}
             </div>
           )}
 
           {/* Explicit Legend */}
           <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-[2px] bg-teal-500" /> Alpha (Chẵn)
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-teal-500" /> {t.inspector.legendAlpha}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-[2px] bg-sky-500" /> Beta (Lẻ)
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-sky-500" /> {t.inspector.legendBeta}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-500" /> SHA-256 OK
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-500" /> {t.inspector.legendVerified}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-[2px] bg-indigo-500" /> Resume ({snap.resumedChunks})
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-indigo-500" /> {t.inspector.legendResumed} ({snap.resumedChunks})
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-[2px] bg-amber-500" /> Failover ({snap.failoverChunks})
+            <span className="inline-flex items-center gap-1 font-medium">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-amber-500" /> {t.inspector.legendFailover} ({snap.failoverChunks})
             </span>
           </div>
         </div>
@@ -246,24 +305,35 @@ export function ProtocolInspector() {
         {/* 3. Throughput Metrics & Sparkline */}
         <div>
           <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              3. Thông lượng thực tế
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {locale === "vi" ? "3. Thông lượng thực tế" : "3. Real-Time Throughput"}
             </h3>
-            <span className="font-mono text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+            <span className="font-mono text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
               {formatSpeed(snap.currentSpeedBps)} · {formatBytes(snap.bytesTransferred)}
             </span>
           </div>
-          <ThroughputSparkline samples={snap.throughputHistory} />
+          <ThroughputSparkline
+            samples={snap.throughputHistory}
+            emptyText={
+              locale === "vi"
+                ? "Biểu đồ thông lượng sẽ vẽ khi có luồng dữ liệu"
+                : "Throughput graph renders when data streams"
+            }
+          />
         </div>
 
         {/* 4. Event Stream */}
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            4. Nhật ký sự kiện ({snap.events.length})
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {locale === "vi"
+              ? `4. Nhật ký sự kiện (${snap.events.length})`
+              : `4. Live Event Stream (${snap.events.length})`}
           </h3>
           {snap.events.length === 0 ? (
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Sẵn sàng ghi nhận các gói bắt tay PAKE, sự kiện Resume Cache và Failover.
+              {locale === "vi"
+                ? "Sẵn sàng ghi nhận các gói bắt tay PAKE, sự kiện Resume Cache và Failover."
+                : "Standby for PAKE handshakes, resume cache events, and failover notifications."}
             </p>
           ) : (
             <ul className="max-h-52 space-y-2 overflow-y-auto pr-1 text-xs">
@@ -273,7 +343,7 @@ export function ProtocolInspector() {
                   className="border-b border-slate-100 pb-1.5 last:border-b-0 dark:border-slate-800/80"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
                       {ev.title}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-400">

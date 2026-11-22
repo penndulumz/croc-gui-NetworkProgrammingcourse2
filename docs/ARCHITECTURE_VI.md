@@ -1,93 +1,168 @@
-# Kiến Trúc Mã Nguồn CrocFlow (Dành Cho Thành Viên Nhóm & Vấn Đáp Giảng Viên)
+# Kiến Trúc Mã Nguồn & Thiết Kế Hệ Thống CrocFlow
 
-Tài liệu này mô tả cấu trúc dự án để bất kỳ thành viên nào cũng có thể chỉ chính xác vị trí từng tính năng khi giảng viên mở mã nguồn hỏi trực tiếp.
-
----
-
-## 1. Triết lý "1 Codebase — Đa Nền Tảng"
-
-Thay vì phải viết 3 ứng dụng riêng rẽ bằng Java/Kotlin (Android), Go/Fyne (Desktop — vốn là lý do giao diện `third-party/crocgui` cũ kém trực quan) và React (Web), CrocFlow sử dụng **duy nhất 1 mã nguồn React + TypeScript + Tailwind CSS**:
-- **Web App / PWA cài đặt được:** Build bởi Vite + `vite-plugin-pwa` (có Service Worker cache tài sản ngoại tuyến và nút cài app ngay trong giao diện).
-- **Android APK:** Đóng gói trực tiếp thư mục `dist/` bằng **Capacitor** (`capacitor.config.ts`).
-- **Desktop App (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`):** Đóng gói bởi **Electron** (`packaging/desktop/`), tự khởi chạy ngầm **Embedded Node Bridge Server** ở cổng cục bộ nên mở app lên là sử dụng được ngay.
+> **Triết lý cốt lõi:** "Duy nhất một mã nguồn — Triển khai đa nền tảng" không phụ thuộc wrapper cồng kềnh hoặc Go WASM runtime.
 
 ---
 
-## 2. Sơ Đồ Luồng Dữ Liệu Tổng Thể
+## 1. Tổng Quan Kiến Trúc Đa Nền Tảng
+
+CrocFlow được xây dựng trên nền tảng **React 19 + TypeScript + Tailwind CSS** hiện đại, biên dịch đồng thời ra 3 dạng ứng dụng phục vụ người dùng cuối:
+1. **Ứng dụng Web PWA (Progressive Web App)**: Đóng gói bởi Vite + `vite-plugin-pwa`, hỗ trợ Service Worker cache tài nguyên ngoại tuyến và lưu trữ dữ liệu cục bộ bằng IndexedDB.
+2. **Ứng dụng Di động Android (APK)**: Đóng gói thông qua **Capacitor** (`capacitor.config.ts`), tích hợp quyền truy cập camera quét mã QR và bộ nhớ tệp.
+3. **Ứng dụng Máy tính Desktop (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`)**: Đóng gói qua **Electron** (`packaging/desktop/`), tích hợp sẵn Bridge Server Node.js cục bộ chạy ngầm, tải về mở lên là dùng được ngay.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│            Giao diện CrocFlow (React + TS · Light/Dark)             │
-│  [Gửi]  [Nhận]  [Relay & Mạng]  [Lịch sử & Nhóm]  [Tải App & Docs]  │
-│              │                              │                        │
-│     (Chế độ Chuẩn v11)             (Chế độ Nâng cao)                 │
-│   src/protocol/croc/*           src/protocol/enhanced/*              │
-│   PAKE v2 · AES-GCM · XXH64     ECDH · SHA-256 · IndexedDB · 2 Relay │
-└──────────────┼──────────────────────────────┼────────────────────────┘
-               │ WebSocket /ws                │ WebSocket /ws-dual
-               ▼                              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│           Unified Bridge & Dual-Relay Server (server.ts)             │
-│  • /ws       → Cầu nối TCP allowlisted (chặn SSRF) tới Croc Public  │
-│  • /ws-dual  → Local Dual-Relay Lab: Relay Alpha (Chẵn) & Beta (Lẻ) │
-│  • /api/relays/ping & /status → Đo độ trễ RTT (ms) & đếm byte thật  │
-└──────────────┬───────────────────────────────────────────────────────┘
-               │ Raw TCP (9009–9013)
-               ▼
-   Cụm Croc Relay Công Cộng (1.getcroc.com ... 4.getcroc.com)
-               ↕ (100% tương thích)
-       croc CLI (Windows/macOS/Linux) & getcroc.com
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Giao diện CrocFlow (React 19 + TypeScript)           │
+│        [Gửi]    [Nhận]    [Relay & Mạng]    [Lịch sử/Nhóm]    [Docs]   │
+│            │                              │                            │
+│    (Chuẩn Croc v11)              (Nâng cao CrocFlow)                   │
+│    src/protocol/croc/*           src/protocol/enhanced/*               │
+│    PAKE v2 · AES-GCM · XXH64     ECDH · SHA-256 · IndexedDB · 2 Relay  │
+└────────────┬──────────────────────────────┬────────────────────────────┘
+             │ WebSocket /ws                │ WebSocket /ws-dual
+             ▼                              ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│              Máy chủ Bridge Server Hợp Nhất (server.ts)                │
+│  • /ws       ➔ Cầu nối TCP allowlist (chống SSRF) tới Relay Croc       │
+│  • /ws-dual  ➔ Phòng Lab 2 Relay: Relay Alpha (Chẵn) & Beta (Lẻ)       │
+│  • /api/*    ➔ Đo độ trễ RTT thực tế & bộ đếm lưu lượng trực tiếp      │
+└────────────┬───────────────────────────────────────────────────────────┘
+             │ Socket TCP Thuần (9009–9017)
+             ▼
+     Cụm Relay Croc Công Cộng (1.getcroc.com ... 4.getcroc.com)
+             ↕ (Tương thích 100% Wire Protocol)
+     Công cụ dòng lệnh croc CLI chính thức (Go) & getcroc.com
 ```
 
 ---
 
-## 3. Bản Đồ Các File Quan Trọng
+## 2. Cấu Trúc Thư Mục & Vai Trò Từng Phân Hệ
 
-### Phần Máy Chủ (Backend Bridge & Dual-Relay)
-| Đường dẫn | Vai trò chính |
-| :--- | :--- |
-| `server.ts` | Điểm khởi chạy Express + WebSocket + Vite Dev Middleware trên cổng `3000`. |
-| `server/bridge-allowlist.ts` | Kiểm tra bảo mật danh sách trắng host/port cho `/ws`, chặn IP nội bộ (chống SSRF). |
-| `server/local-dual-relay.ts` | Triển khai cặp phòng Relay Alpha và Relay Beta độc lập, cô lập phòng theo `room`, đếm byte và frame chuyển tiếp thật. |
-
-### Phần Lõi Giao Thức (Protocol Engines)
-| Đường dẫn | Vai trò chính |
-| :--- | :--- |
-| `src/protocol/croc/*` | Bộ giao thức **Croc v11** thuần TypeScript (PAKE P-256, XXH64, nén, đóng khung nhị phân) tương thích `croc` CLI gốc. |
-| `src/protocol/event-bus.ts` | Kênh sự kiện trực tiếp (`protocolEventBus`) phát mốc PAKE, trạng thái từng Chunk, thông lượng và log thật tới Bảng soi giao thức. |
-| `src/protocol/enhanced/manifest.ts` | Tạo Folder Manifest, chống leo thư mục (`sanitizeRelativePath`), băm SHA-256 từng Chunk và lập kế hoạch khôi phục (`computeResumePlan`). |
-| `src/protocol/enhanced/dual-relay-scheduler.ts` | Bộ lập lịch chia tải Chunk Chẵn → Alpha, Chunk Lẻ → Beta và xử lý `triggerAlphaFailover()`. |
-| `src/protocol/enhanced/resume-cache.ts` | Lưu/đọc/xóa các Chunk đã xác thực SHA-256 trong IndexedDB (`crocflow-resume-db`). |
-| `src/protocol/enhanced/enhanced-client.ts` | Engine truyền nhận E2E hoàn chỉnh trên `/ws-dual`, bao gồm cả 2 kịch bản Demo 1-click dùng WebSocket thật. |
-
-### Phần Giao Diện & Tiện Ích Người Dùng
-| Đường dẫn | Vai trò chính |
-| :--- | :--- |
-| `src/components/AppShell.tsx` | Khung ứng dụng responsive kiểu LocalSend (Sidebar Desktop + Bottom Bar 5 tab Mobile + đổi Dark/Light mode). |
-| `src/components/SendView.tsx` | Màn hình Gửi (Chuẩn Croc v11 File/Text + Nâng cao Thư mục/2 Relay/Failover + QR Code + Demo 1-click). |
-| `src/components/ReceiveView.tsx` | Màn hình Nhận (tự điền `?code=`, xem trước Offer/Manifest, xem văn bản an toàn, quản lý IndexedDB Resume Cache). |
-| `src/components/ProtocolInspector.tsx` | Bảng soi giao thức trực tiếp (Timeline PAKE 5 bước, lưới Chunk, biểu đồ tốc độ, xuất log `.md`). |
-| `src/components/RelaysView.tsx` | Quản lý Relay, đo Ping RTT trực tiếp, xếp hạng độ trễ và cấu hình Relay tự dựng. |
-| `src/components/HistoryGroupView.tsx` | Đổi tên thiết bị (`Device Alias`), Passphrase nhóm xoay vòng theo tháng (`HKDF-SHA-256`) và Lịch sử truyền có tìm kiếm/lọc. |
-| `src/components/AppDocsHubView.tsx` | Trung tâm cài đặt PWA/APK/Desktop, tài liệu học thuật tích hợp và xuất Báo Cáo Học Thuật `.md`. |
-
-### Đóng Gói Đa Nền Tảng & CI/CD
-| Đường dẫn | Vai trò chính |
-| :--- | :--- |
-| `capacitor.config.ts` | Cấu hình đóng gói Android APK (`app.crocflow.mobile`). |
-| `packaging/desktop/*` | Trình bao Electron tự khởi chạy Bridge Server cục bộ cho Windows/macOS/Linux. |
-| `.github/workflows/build-releases.yml` | Quy trình GitHub Actions tự động chạy toàn bộ bài test, build PWA, build Android `.apk` và Desktop `.exe`/`.dmg`/`.AppImage`. |
+```
+crocflow/
+├── public/                     # Tài nguyên tĩnh, biểu tượng SVG, Web App Manifest
+├── server/                     # Backend Bridge & Phòng Lab 2 Relay
+│   ├── bridge-allowlist.ts     # Bộ lọc kiểm tra host/port, chống tấn công SSRF
+│   ├── local-dual-relay.ts     # Triển khai 2 relay Alpha và Beta trong bộ nhớ
+│   └── server.test.ts          # Bộ kiểm thử tích hợp backend
+├── src/
+│   ├── components/             # Các màn hình và thành phần giao diện
+│   │   ├── AppShell.tsx        # Khung điều hướng responsive (Desktop & Di động)
+│   │   ├── SendView.tsx        # Màn hình Gửi tệp, thư mục, mã QR Code
+│   │   ├── ReceiveView.tsx     # Màn hình Nhận tệp, xem trước Offer, Cây thư mục
+│   │   ├── RelaysView.tsx      # Quản lý Relay, bảng xếp hạng độ trễ RTT
+│   │   ├── HistoryGroupView.tsx# Tên thiết bị & Passphrase nhóm xoay vòng
+│   │   ├── AppDocsHubView.tsx  # Trung tâm học thuật, tài liệu & bộ chạy Demo
+│   │   └── ProtocolInspector.tsx# Bảng soi giao thức PAKE & Chunk Matrix thời gian thực
+│   ├── hooks/                  # React hooks tiện ích (Cài đặt PWA...)
+│   ├── lib/                    # Tiện ích dùng chung & quản lý trạng thái
+│   │   ├── bridge-client.ts    # Client kết nối tới Bridge Server
+│   │   ├── format.ts           # Định dạng byte, tốc độ truyền và thời gian
+│   │   ├── group-passphrase.ts # Thuật toán HKDF-SHA-256 xoay vòng mã theo tháng
+│   │   ├── history-store.ts    # Lưu lịch sử truyền & danh bạ máy quen vào LocalStorage
+│   │   ├── i18n.ts             # Bộ máy đa ngôn ngữ (Tiếng Việt & English)
+│   │   ├── metrics.ts          # Đo tốc độ Rolling-window & ước tính thời gian ETA
+│   │   ├── relay-manager.ts    # Thuật toán đo RTT và chọn relay tối ưu
+│   │   ├── theme.ts            # Quản lý giao diện Sáng / Tối
+│   │   └── zip.ts              # Đóng gói và giải nén tệp .ZIP thuần client
+│   ├── protocol/               # Bộ xử lý giao thức mạng & mật mã
+│   │   ├── croc/               # Ngăn xếp giao thức Croc v11 nguyên bản
+│   │   │   ├── client.ts       # Máy trạng thái truyền/nhận chuẩn Croc
+│   │   │   ├── codephrase.ts   # Sinh mã bí mật từ từ điển EFF short wordlist
+│   │   │   ├── connection.ts   # Đóng khung nhị phân gói tin qua TCP/WebSocket
+│   │   │   ├── crypto.ts       # Wrapper mã hóa WebCrypto AES-GCM và HKDF
+│   │   │   ├── pake.ts         # Bắt tay mật mã PAKE v2 trên đường cong P-256
+│   │   │   └── types.ts        # Định nghĩa các cấu trúc gói tin của Croc v11
+│   │   └── enhanced/           # Ngăn xếp giao thức Nâng cao CrocFlow
+│   │       ├── dual-relay-scheduler.ts # Bộ lập lịch chia tải chẵn/lẻ & chuyển lỗi
+│   │       ├── enhanced-client.ts      # Engine truyền tải song song & bộ chạy Demo
+│   │       ├── manifest.ts     # Folder Manifest, băm SHA-256 chunk & chống leo thư mục
+│   │       └── resume-cache.ts # Bộ nhớ đệm Chunk lưu trữ trong IndexedDB
+│   └── event-bus.ts            # Kênh sự kiện phát dữ liệu tới Bảng soi giao thức
+├── docs/                       # Tài liệu kỹ thuật chi tiết song ngữ
+│   ├── ARCHITECTURE_EN.md      # Tài liệu kiến trúc tiếng Anh
+│   ├── ARCHITECTURE_VI.md      # Tài liệu này (Tiếng Việt)
+│   ├── NETWORKING_GUIDE_EN.md  # Cẩm nang mạng máy tính tiếng Anh
+│   ├── NETWORKING_GUIDE_VI.md  # Cẩm nang mạng máy tính tiếng Việt
+│   ├── DEMO_GUIDE_EN.md        # Hướng dẫn demo & đánh giá tiếng Anh
+│   ├── DEMO_GUIDE_VI.md        # Hướng dẫn demo & đánh giá tiếng Việt
+│   ├── SETUP_AND_DEPLOY_EN.md  # Hướng dẫn cài đặt & build tiếng Anh
+│   └── SETUP_AND_DEPLOY_VI.md  # Hướng dẫn cài đặt & build tiếng Việt
+├── capacitor.config.ts         # Cấu hình đóng gói Android APK
+├── packaging/desktop/          # Cấu hình đóng gói Desktop Electron
+├── server.ts                   # Điểm khởi chạy máy chủ Express & Vite middleware
+└── vite.config.ts              # Cấu hình Vite, Tailwind CSS v4, PWA Plugin
+```
 
 ---
 
-## 4. Bộ Kiểm Thử Tự Động (Automated Tests)
+## 3. Chi Tiết Các Phân Hệ Cốt Lõi
 
-Mọi thuật toán cốt lõi đều tách rời khỏi giao diện và có bài kiểm thử tự động chạy bằng `npx tsx --test`:
-- `server/bridge-allowlist.test.ts` — Xác minh chặn SSRF & allowlist cổng.
-- `server/server.test.ts` — Kiểm tra `/healthz`, `/config.js`, `/api/relays/status`, và từ chối cổng cấm trên `/ws`.
-- `server/local-dual-relay.test.ts` — Kiểm tra ghép cặp Alpha/Beta, cô lập phòng và ping.
-- `src/protocol/croc/codephrase.test.ts` — Kiểm tra bộ từ điển 1296 từ EFF và tính chỉ số relay chuẩn Croc v11.
-- `src/protocol/enhanced/manifest.test.ts` — Kiểm tra chống Path Traversal, băm SHA-256 và Resume khi có tệp mới.
-- `src/protocol/enhanced/dual-relay-scheduler.test.ts` — Kiểm tra chia tải Chẵn/Lẻ và Failover sang Beta.
-- `src/protocol/enhanced/enhanced-transfer.test.ts` — Kiểm thử WebSocket đầu-cuối thật cho cả Dual-Relay Failover và Folder Resume.
-- `src/lib/group-passphrase.test.ts` & `src/lib/theme.test.ts` — Kiểm tra xoay vòng khóa hàng tháng và lưu giao diện Sáng/Tối.
+### 3.1. Ngăn Xếp Chuẩn Croc v11 (`src/protocol/croc/*`)
+- **Bắt tay PAKE v2 (Password Authenticated Key Exchange)**:
+  - Sinh cặp khóa tạm thời (ephemeral) trên đường cong NIST P-256 ở cả hai đầu.
+  - Pha trộn điểm công khai với mã băm của Codephrase bí mật nhằm chống nghe lén và tấn công duyệt từ điển ngoại tuyến (offline dictionary attacks).
+  - Dẫn xuất khóa phiên 256-bit thông qua hàm `HKDF-SHA-256`.
+- **Đóng khung gói tin (Wire Framing)**:
+  - Sử dụng định dạng gói tin nhị phân có tiền tố chỉ độ dài (Length-prefixed binary framing).
+  - Toàn bộ khối dữ liệu mã hóa bằng thuật toán `AES-256-GCM` với vector khởi tạo (IV 12-byte) ngẫu nhiên cho từng gói.
+  - Kiểm tra tính toàn vẹn bằng mã băm XXH64 / SHA-256 tương thích 100% với mã nguồn gốc của Go.
+
+### 3.2. Ngăn Xếp Nâng Cao CrocFlow (`src/protocol/enhanced/*`)
+- **Công cụ Folder Manifest (`manifest.ts`)**:
+  - Quét đệ quy thư mục và tạo đối tượng `FolderManifest`.
+  - Cắt tệp thành các Chunk cố định (16 KB, 64 KB hoặc 256 KB).
+  - Tính mã băm SHA-256 cho từng Chunk riêng biệt và cho từng tệp.
+  - Sử dụng hàm `sanitizeRelativePath` chặn đứng rủi ro tấn công leo thư mục (`../`).
+- **Bộ Lập Lịch Truyền Song Song 2 Relay (`dual-relay-scheduler.ts`)**:
+  - Phân luồng điều phối gói tin:
+    - Chunk chẵn (`0, 2, 4, ...`) ➔ `Relay Alpha`
+    - Chunk lẻ (`1, 3, 5, ...`) ➔ `Relay Beta`
+  - Giám sát tình trạng kết nối. Khi Relay Alpha mất kết nối, hàm `triggerAlphaFailover()` chuyển toàn bộ các Chunk chẵn chưa hoàn tất sang Relay Beta ngay lập tức.
+- **Bộ Nhớ Đệm Khôi Phục IndexedDB (`resume-cache.ts`)**:
+  - Lưu trữ các Chunk đã xác thực trong cơ sở dữ liệu `crocflow-resume-db` của trình duyệt.
+  - Khi có mạng trở lại, hàm `computeResumePlan()` đối chiếu Manifest với IndexedDB và chỉ tải những Chunk còn thiếu.
+
+### 3.3. Cầu Nối An Toàn Bridge Server (`server/*`)
+- **Rào cản Sandbox Trình Duyệt**: Trình duyệt không thể mở kết nối TCP thô tới cổng `9009`.
+- **Giải pháp Bridge Server**:
+  - Trình duyệt kết nối WebSocket tới `server.ts` (`/ws?relay=0&port=9009`).
+  - `server/bridge-allowlist.ts` kiểm tra danh sách trắng host/port và loại bỏ các dải IP nội bộ nhằm triệt tiêu hoàn toàn lỗ hổng SSRF.
+  - Sau khi kiểm duyệt, server làm ống dẫn hai chiều chuyển tiếp các byte nhị phân giữa WebSocket và socket TCP tới Croc Relay.
+
+---
+
+## 4. Mô Hình Máy Trạng Thái & Đồng Bộ Đa Tuyến
+
+```mermaid
+stateDiagram-v2
+    [*] --> Nghỉ
+    Nghỉ --> TạoFolderManifest: Người dùng chọn thư mục/tệp
+    TạoFolderManifest --> BắtTayPAKE: Tạo mã Codephrase
+    BắtTayPAKE --> KếtNốiThànhCông: Xác nhận 2 chiều thành công
+    KếtNốiThànhCông --> TruyềnSongSong: Mở WebSocket Alpha & Beta
+    
+    state TruyềnSongSong {
+        [*] --> PhânPhốiChunk
+        PhânPhốiChunk --> ChờXácNhận: Chẵn -> Alpha, Lẻ -> Beta
+        ChờXácNhận --> PhânPhốiChunk: Chunk xác thực thành công
+        ChờXácNhận --> KíchHoạtFailover: Socket Alpha bị đóng/lỗi
+        KíchHoạtFailover --> PhânPhốiChunk: Chuyển toàn bộ Chunk chẵn sang Beta
+    }
+    
+    TruyềnSongSong --> HoànTất: Toàn bộ Chunk xác thực 100%
+    HoànTất --> [*]
+```
+
+---
+
+## 5. Ma Trận Đe Dọa An Ninh & Giải Pháp Bảo Vệ
+
+| Mối đe dọa an ninh | Giải pháp kỹ thuật bảo vệ | Vị trí kiểm thử tự động |
+| :--- | :--- | :--- |
+| **Nghe lén trên Relay** | Mã hóa E2E bằng AES-256-GCM. Relay chỉ thấy bản mã và IV ngẫu nhiên. | `src/protocol/enhanced/enhanced-transfer.test.ts` |
+| **Tấn công xen giữa (MITM)** | Bắt tay PAKE + thẻ xác nhận hai chiều dẫn xuất từ HKDF (`confirmA`, `confirmB`). | `src/protocol/croc/codephrase.test.ts` |
+| **Tấn công SSRF qua Bridge** | Lọc bỏ toàn bộ IP nội bộ RFC 1918, loopback và IP metadata đám mây (`169.254.169.254`). | `server/bridge-allowlist.test.ts` |
+| **Tấn công leo thư mục (Path Traversal)** | Chuẩn hóa POSIX, chặn ký tự `..`, dấu `/` đầu dòng, ký tự ổ đĩa và ký tự điều khiển. | `src/protocol/enhanced/manifest.test.ts` |
+| **Tấn công phát lại (Replay Attacks)** | Cặp khóa P-256 tạm thời, chuỗi muối ngẫu nhiên (`salt`) và IV 12-byte không lặp lại. | `src/protocol/croc/types.ts` |

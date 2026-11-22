@@ -35,6 +35,8 @@ import {
   type TransferHistoryEntry,
 } from "../lib/history-store";
 import { formatBytes, formatDateTimeVi } from "../lib/format";
+import type { Locale } from "../lib/i18n";
+import { getTranslations } from "../lib/i18n";
 
 export interface HistoryGroupViewProps {
   deviceAlias: string;
@@ -44,8 +46,14 @@ export interface HistoryGroupViewProps {
   onUseCodeForSend: (code: string) => void;
   onUseCodeForReceive: (code: string) => void;
   onQuickSendToPeer?: (peer: PeerPreset) => void;
+  locale?: Locale;
 }
 
+/**
+ * History, Device Identity & Monthly Group Passphrase View.
+ * Provides custom Device Alias management, monthly rotating HKDF-SHA-256 group passphrases,
+ * address book of recurring peer presets, and searchable transfer audit logs.
+ */
 export function HistoryGroupView({
   deviceAlias,
   onUpdateDeviceAlias,
@@ -54,7 +62,9 @@ export function HistoryGroupView({
   onUseCodeForSend,
   onUseCodeForReceive,
   onQuickSendToPeer,
+  locale = "vi",
 }: HistoryGroupViewProps) {
+  const t = getTranslations(locale);
   const [aliasDraft, setAliasDraft] = useState(deviceAlias);
   const [aliasSaved, setAliasSaved] = useState(false);
 
@@ -114,7 +124,11 @@ export function HistoryGroupView({
     const name = groupName.trim();
     const seed = groupSecret.trim();
     if (!name || seed.length < 6) {
-      setGroupError("Cần nhập tên nhóm và khóa gốc tối thiểu 6 ký tự.");
+      setGroupError(
+        locale === "vi"
+          ? "Cần nhập tên nhóm và khóa gốc tối thiểu 6 ký tự."
+          : "Please provide a group name and master secret with at least 6 characters.",
+      );
       return;
     }
     const next: GroupPassphraseRecord[] = [
@@ -145,7 +159,7 @@ export function HistoryGroupView({
     setPeerError(null);
     const cleanAlias = peerAliasInput.trim();
     if (!cleanAlias) {
-      setPeerError("Vui lòng nhập tên thiết bị / bí danh.");
+      setPeerError(locale === "vi" ? "Vui lòng nhập tên thiết bị / bí danh." : "Please provide a device alias.");
       return;
     }
 
@@ -163,8 +177,8 @@ export function HistoryGroupView({
     setEditingPeerId(null);
     setPeerSuccess(
       editingPeerId
-        ? `Đã cập nhật thiết bị "${saved.alias}".`
-        : `Đã lưu thiết bị "${saved.alias}" vào danh sách thường gặp.`,
+        ? (locale === "vi" ? `Đã cập nhật thiết bị "${saved.alias}".` : `Updated peer "${saved.alias}".`)
+        : (locale === "vi" ? `Đã lưu thiết bị "${saved.alias}" vào danh sách thường gặp.` : `Saved peer "${saved.alias}" to frequent presets.`),
     );
     setTimeout(() => setPeerSuccess(null), 2500);
   };
@@ -224,37 +238,43 @@ export function HistoryGroupView({
     });
   }, [history, searchQuery, directionFilter]);
 
+  const formatDate = (ts: number) => {
+    return locale === "vi" ? formatDateTimeVi(ts) : new Date(ts).toLocaleString();
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Lịch sử, Thiết bị & Passphrase Nhóm
+          {t.history.title}
         </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Quản lý tên thiết bị, khóa nhóm tự xoay vòng hàng tháng (HKDF-SHA-256) và tra cứu toàn bộ phiên đã truyền.
+          {t.history.subtitle}
         </p>
       </div>
 
       {/* Device Alias + Monthly Group Passphrase Row */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         {/* Device Alias Card */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-            <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
-              Tên thiết bị (Device Alias)
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 lg:col-span-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+              <Smartphone className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+              {t.history.deviceAliasTitle}
             </h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Gắn nhãn dễ nhớ (ví dụ: Laptop thuyết trình, Android của Minh) vào lịch sử truyền cục bộ.
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            {t.history.deviceAliasHint}
           </p>
           <form onSubmit={handleSaveAlias} className="mt-4 space-y-3">
             <div>
               <label
                 htmlFor="device-alias-input"
-                className="block text-xs font-medium text-slate-600 dark:text-slate-400"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
               >
-                Tên thiết bị hiện tại
+                {locale === "vi" ? "Tên thiết bị hiện tại" : "Current Device Alias"}
               </label>
               <input
                 id="device-alias-input"
@@ -262,93 +282,95 @@ export function HistoryGroupView({
                 maxLength={48}
                 value={aliasDraft}
                 onChange={(e) => setAliasDraft(e.target.value)}
-                className="mt-1 min-h-[42px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </div>
             <button
               type="submit"
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 shadow-xs transition-colors"
             >
               {aliasSaved ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-400 dark:text-emerald-600" aria-hidden="true" />
-                  Đã lưu tên thiết bị
+                  <span>{t.common.saved}</span>
                 </>
               ) : (
-                "Lưu tên thiết bị"
+                <span>{t.history.saveAliasBtn}</span>
               )}
             </button>
           </form>
         </section>
 
         {/* Monthly Rotating Group Passphrase Card */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-7 dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 lg:col-span-7 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-              <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
-                Passphrase nhóm xoay vòng hàng tháng
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                {t.history.groupPassphraseTitle}
               </h2>
             </div>
             <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500 dark:text-slate-400">
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-              Chu kỳ {currentPeriod}
+              {currentPeriod}
             </span>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Cả nhóm chỉ cần nhớ 1 khóa gốc chung — CrocFlow dùng <code className="font-mono">HKDF-SHA-256(seed, YYYY-MM)</code> để tự sinh mã EFF mới vào ngày đầu mỗi tháng.
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            {t.history.groupPassphraseDesc}
           </p>
 
           <form onSubmit={handleAddGroup} className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <input
               type="text"
-              aria-label="Tên nhóm làm việc"
+              aria-label={t.history.groupNameLabel}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Tên nhóm (VD: Nhóm Đồ Án 04)"
-              className="min-h-[40px] rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              placeholder={t.history.groupNameLabel}
+              className="min-h-[40px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
             />
             <input
               type="password"
-              aria-label="Khóa gốc của nhóm"
+              aria-label={t.history.groupSecretLabel}
               value={groupSecret}
               onChange={(e) => setGroupSecret(e.target.value)}
-              placeholder="Khóa gốc (≥ 6 ký tự)"
-              className="min-h-[40px] rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              placeholder={locale === "vi" ? "Khóa gốc (≥ 6 ký tự)" : "Master Secret (≥ 6 chars)"}
+              className="min-h-[40px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
             />
             <button
               type="submit"
-              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-teal-700"
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-teal-700 transition-colors"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Tạo khóa nhóm
+              <span>{t.history.newGroupBtn}</span>
             </button>
           </form>
           {groupError && (
-            <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+            <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400 font-semibold">
               {groupError}
             </p>
           )}
 
           {groups.length > 0 ? (
-            <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
               {groups.map((g) => {
                 const derived = derivedMap[g.id];
                 return (
                   <li
                     key={g.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3 text-xs"
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs"
                   >
                     <div className="min-w-0">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">
                         {g.groupName}
                       </div>
-                      <div className="mt-0.5 font-mono font-semibold text-teal-700 dark:text-teal-400">
-                        {derived ? derived.codephrase : "Đang dẫn xuất…"}
+                      <div className="mt-0.5 font-mono font-bold text-teal-600 dark:text-teal-400">
+                        {derived ? derived.codephrase : (locale === "vi" ? "Đang dẫn xuất…" : "Deriving...")}
                       </div>
                       {derived && (
-                        <div className="mt-0.5 text-[11px] text-slate-500">
-                          Đổi mã kế tiếp: {derived.nextRotationDate} · Vân tay {derived.fingerprint}
+                        <div className="mt-0.5 text-[11px] text-slate-500 font-mono">
+                          {locale === "vi" ? `Đổi mã: ${derived.nextRotationDate} · Vân tay ${derived.fingerprint}` : `Rotates: ${derived.nextRotationDate} · FP: ${derived.fingerprint}`}
                         </div>
                       )}
                     </div>
@@ -358,24 +380,24 @@ export function HistoryGroupView({
                           <button
                             type="button"
                             onClick={() => onUseCodeForSend(derived.codephrase)}
-                            className="min-h-[34px] rounded-lg bg-teal-600/10 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-600/20 dark:bg-teal-400/10 dark:text-teal-300"
+                            className="min-h-[34px] rounded-xl bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 transition-colors"
                           >
-                            Dùng để Gửi
+                            {t.history.useForSendBtn}
                           </button>
                           <button
                             type="button"
                             onClick={() => onUseCodeForReceive(derived.codephrase)}
-                            className="min-h-[34px] rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                            className="min-h-[34px] rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
                           >
-                            Dùng để Nhận
+                            {t.history.useForReceiveBtn}
                           </button>
                         </>
                       )}
                       <button
                         type="button"
                         onClick={() => handleRemoveGroup(g.id)}
-                        aria-label={`Xóa nhóm ${g.groupName}`}
-                        className="flex h-[34px] w-[34px] items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50"
+                        aria-label={`Remove group ${g.groupName}`}
+                        className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
@@ -386,23 +408,27 @@ export function HistoryGroupView({
             </ul>
           ) : (
             <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-              Chưa có Passphrase nhóm nào. Tạo một nhóm để chia sẻ tệp định kỳ mà không phải đọc lại mã mỗi lần gửi.
+              {locale === "vi"
+                ? "Chưa có Passphrase nhóm nào. Tạo một nhóm để chia sẻ tệp định kỳ mà không phải đọc lại mã mỗi lần gửi."
+                : "No group passphrases created yet. Create one to derive synchronized monthly transfer codes with collaborators."}
             </p>
           )}
         </section>
       </div>
 
       {/* Frequent Peer Presets Management Section */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+              <Users className="h-4 w-4" aria-hidden="true" />
+            </div>
             <div>
-              <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100">
-                Thiết Bị Thường Gặp (Frequent Peers)
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                {t.history.peerPresetsTitle}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Lưu tên thiết bị quen thuộc (Laptop, điện thoại, máy phòng lab) để gửi nhanh chỉ với 1 chạm.
+                {t.history.peerPresetsDesc}
               </p>
             </div>
           </div>
@@ -417,18 +443,20 @@ export function HistoryGroupView({
                 type="search"
                 value={peerSearchQuery}
                 onChange={(e) => setPeerSearchQuery(e.target.value)}
-                placeholder="Tìm thiết bị…"
-                aria-label="Tìm kiếm thiết bị thường gặp"
-                className="min-h-[36px] w-48 rounded-lg border border-slate-300 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                placeholder={locale === "vi" ? "Tìm thiết bị…" : "Search peers..."}
+                aria-label="Search peers"
+                className="min-h-[36px] w-48 rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
               />
             </div>
           )}
         </div>
 
         {/* Add / Edit Peer Form */}
-        <form onSubmit={handleSavePeer} className="mt-4 rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 dark:border-slate-800/80 dark:bg-slate-950/40">
-          <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-            {editingPeerId ? "Chỉnh sửa thông tin thiết bị" : "Thêm thiết bị thường gặp mới"}
+        <form onSubmit={handleSavePeer} className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-950/40">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            {editingPeerId
+              ? (locale === "vi" ? "Chỉnh sửa thông tin thiết bị" : "Edit Saved Peer")
+              : (locale === "vi" ? "Thêm thiết bị quen thuộc mới" : "Add New Frequent Peer")}
           </div>
 
           <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-12">
@@ -438,9 +466,9 @@ export function HistoryGroupView({
                 maxLength={48}
                 value={peerAliasInput}
                 onChange={(e) => setPeerAliasInput(e.target.value)}
-                placeholder="Tên thiết bị (VD: Laptop ASUS Lab 302, iPhone Minh)"
-                aria-label="Tên thiết bị"
-                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                placeholder={t.history.peerAliasLabel}
+                aria-label={t.history.peerAliasLabel}
+                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -450,10 +478,10 @@ export function HistoryGroupView({
                 onChange={(e) =>
                   setPeerProfileInput(e.target.value as "default" | RelayProfileMode)
                 }
-                aria-label="Hồ sơ Relay ưu tiên"
-                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                aria-label="Preferred Relay Profile"
+                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               >
-                <option value="default">Hồ sơ: Mặc định</option>
+                <option value="default">{locale === "vi" ? "Hồ sơ: Mặc định" : "Profile: Default"}</option>
                 <option value="public">🌐 Public Croc Relays</option>
                 <option value="local-lab">⚡ Local Dual-Relay Lab</option>
               </select>
@@ -465,23 +493,23 @@ export function HistoryGroupView({
                 maxLength={64}
                 value={peerNotesInput}
                 onChange={(e) => setPeerNotesInput(e.target.value)}
-                placeholder="Ghi chú (tùy chọn)"
-                aria-label="Ghi chú thiết bị"
-                className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                placeholder={t.history.peerNotesLabel}
+                aria-label={t.history.peerNotesLabel}
+                className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
               <button
                 type="submit"
-                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1 rounded-xl bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-700 transition-colors"
               >
                 {editingPeerId ? (
                   <>
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    Lưu
+                    <span>{t.common.save}</span>
                   </>
                 ) : (
                   <>
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    Thêm
+                    <span>{t.history.addPeerBtn}</span>
                   </>
                 )}
               </button>
@@ -489,22 +517,22 @@ export function HistoryGroupView({
                 <button
                   type="button"
                   onClick={handleCancelEditPeer}
-                  className="inline-flex min-h-[38px] shrink-0 items-center rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="inline-flex min-h-[38px] shrink-0 items-center rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  Hủy
+                  <span>{t.common.cancel}</span>
                 </button>
               )}
             </div>
           </div>
 
           {peerError && (
-            <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+            <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400 font-semibold">
               {peerError}
             </p>
           )}
           {peerSuccess && (
-            <p role="status" className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <p role="status" className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
               {peerSuccess}
             </p>
           )}
@@ -512,16 +540,16 @@ export function HistoryGroupView({
 
         {/* Existing Peers List */}
         {filteredPeers.length > 0 ? (
-          <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+          <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
             {filteredPeers.map((p) => (
               <li
                 key={p.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3 text-xs"
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">
                       {p.alias}
                     </span>
                     {p.preferredRelayProfile && (
@@ -537,17 +565,17 @@ export function HistoryGroupView({
                         p.preferredRelayProfile === "local-lab" ? (
                           <>
                             <Zap className="h-2.5 w-2.5" aria-hidden="true" />
-                            Local Dual-Relay Lab
+                            Local Lab
                           </>
                         ) : (
-                          "🌐 Public Croc Relays"
+                          "🌐 Public"
                         )}
                       </span>
                     )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
                     {p.notes && <span>{p.notes}</span>}
-                    <span>Lần cuối: {formatDateTimeVi(p.lastSeen)}</span>
+                    <span>{locale === "vi" ? `Lần cuối: ${formatDate(p.lastSeen)}` : `Last seen: ${formatDate(p.lastSeen)}`}</span>
                   </div>
                 </div>
 
@@ -555,24 +583,24 @@ export function HistoryGroupView({
                   <button
                     type="button"
                     onClick={() => handleQuickSend(p)}
-                    className="inline-flex min-h-[34px] items-center gap-1 rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 shadow-xs"
+                    className="inline-flex min-h-[34px] items-center gap-1 rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 shadow-xs transition-colors"
                   >
                     <Send className="h-3 w-3" aria-hidden="true" />
-                    Gửi nhanh
+                    <span>{locale === "vi" ? "Gửi nhanh" : "Quick Send"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleStartEditPeer(p)}
-                    aria-label={`Sửa thiết bị ${p.alias}`}
-                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    aria-label={`Edit ${p.alias}`}
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
                   >
                     <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeletePeer(p.id)}
-                    aria-label={`Xóa thiết bị ${p.alias}`}
-                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50"
+                    aria-label={`Delete ${p.alias}`}
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -583,19 +611,19 @@ export function HistoryGroupView({
         ) : (
           <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
             {peerSearchQuery
-              ? `Không tìm thấy thiết bị nào khớp với từ khóa "${peerSearchQuery}".`
-              : "Chưa lưu thiết bị nào. Thêm các thiết bị thường xuyên chuyển tệp để gửi một chạm dễ dàng."}
+              ? (locale === "vi" ? `Không tìm thấy thiết bị nào khớp với "${peerSearchQuery}".` : `No peers found matching "${peerSearchQuery}".`)
+              : (locale === "vi" ? "Chưa lưu thiết bị nào. Thêm các thiết bị thường xuyên chuyển tệp để gửi một chạm dễ dàng." : "No saved peers yet. Save recurring collaborator devices for quick 1-click dispatch.")}
           </p>
         )}
       </section>
 
       {/* Transfer History Table */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5 dark:border-slate-800">
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3.5 dark:border-slate-800/80">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-            <h2 className="font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Lịch sử phiên truyền ({filteredHistory.length})
+            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+              {t.history.transferHistoryTitle} ({filteredHistory.length})
             </h2>
           </div>
 
@@ -609,25 +637,25 @@ export function HistoryGroupView({
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Tìm kiếm lịch sử truyền"
-                placeholder="Tìm tên tệp hoặc mã…"
-                className="min-h-[36px] rounded-lg border border-slate-300 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                aria-label="Search transfer history"
+                placeholder={t.history.searchPlaceholder}
+                className="min-h-[36px] rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
               />
             </div>
 
-            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+            <div className="inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
               {(["all", "send", "receive"] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => setDirectionFilter(f)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
                     directionFilter === f
-                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
-                  {f === "all" ? "Tất cả" : f === "send" ? "Đã gửi" : "Đã nhận"}
+                  {f === "all" ? t.history.filterAll : f === "send" ? t.history.filterSend : t.history.filterReceive}
                 </button>
               ))}
             </div>
@@ -637,10 +665,10 @@ export function HistoryGroupView({
                 <button
                   type="button"
                   onClick={() => setConfirmClear(true)}
-                  className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300"
+                  className="inline-flex min-h-[36px] items-center gap-1 rounded-xl border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Xóa lịch sử
+                  <span>{t.history.clearHistoryBtn}</span>
                 </button>
               ) : (
                 <div className="flex items-center gap-1.5">
@@ -651,16 +679,16 @@ export function HistoryGroupView({
                       onRefreshHistory();
                       setConfirmClear(false);
                     }}
-                    className="min-h-[36px] rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
+                    className="min-h-[36px] rounded-xl bg-rose-600 px-3 py-1 text-xs font-semibold text-white shadow-xs"
                   >
-                    Xác nhận xóa
+                    {t.common.confirm}
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmClear(false)}
-                    className="min-h-[36px] rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                    className="min-h-[36px] rounded-xl border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
                   >
-                    Hủy
+                    {t.common.cancel}
                   </button>
                 </div>
               ))}
@@ -668,32 +696,36 @@ export function HistoryGroupView({
         </div>
 
         {filteredHistory.length === 0 ? (
-          <div className="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
-            Chưa có phiên truyền nào phù hợp. Hãy thử gửi tệp hoặc chạy Demo 2 Relay ở mục Gửi để ghi nhận lịch sử thật.
+          <div className="px-5 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+            {t.history.noHistoryYet}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                  <th className="px-4 py-2.5 font-semibold">Hướng & Nội dung</th>
-                  <th className="hidden px-4 py-2.5 font-semibold md:table-cell">Giao thức & Xác thực</th>
-                  <th className="px-4 py-2.5 font-semibold whitespace-nowrap">Dung lượng</th>
-                  <th className="hidden px-4 py-2.5 font-semibold sm:table-cell whitespace-nowrap">Thời gian</th>
+                <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-500 dark:border-slate-800/80 dark:bg-slate-950/60 dark:text-slate-400">
+                  <th className="px-5 py-3 font-semibold">{locale === "vi" ? "Hướng & Nội dung" : "Direction & Payload"}</th>
+                  <th className="hidden px-5 py-3 font-semibold md:table-cell">{locale === "vi" ? "Giao thức & Xác thực" : "Protocol & Verification"}</th>
+                  <th className="px-5 py-3 font-semibold whitespace-nowrap">{t.common.bytes}</th>
+                  <th className="hidden px-5 py-3 font-semibold sm:table-cell whitespace-nowrap">{locale === "vi" ? "Thời gian" : "Timestamp"}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {filteredHistory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                    <td className="px-4 py-3">
-                      <div className="flex items-start gap-2">
+                  <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-start gap-2.5">
                         {item.direction === "send" ? (
-                          <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5">
+                            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                          </div>
                         ) : (
-                          <ArrowDownLeft className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+                          <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5">
+                            <ArrowDownLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                          </div>
                         )}
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-slate-900 dark:text-slate-100">
+                          <div className="truncate font-semibold text-slate-900 dark:text-slate-100">
                             {item.summaryName}
                           </div>
                           <div className="mt-0.5 font-mono text-[11px] text-slate-500">
@@ -702,25 +734,25 @@ export function HistoryGroupView({
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 text-slate-600 md:table-cell dark:text-slate-400">
+                    <td className="hidden px-5 py-3.5 text-slate-600 md:table-cell dark:text-slate-400">
                       <div>
                         {item.mode === "enhanced"
                           ? item.dualRelay
-                            ? "Nâng cao Dual-Relay"
-                            : "Nâng cao Manifest"
-                          : "Chuẩn Croc v11"}{" "}
+                            ? (locale === "vi" ? "Nâng cao Dual-Relay" : "Enhanced Dual-Relay")
+                            : (locale === "vi" ? "Nâng cao Manifest" : "Enhanced Manifest")
+                          : "Croc v11"}{" "}
                         · {item.verifiedHash}
                       </div>
                       <div className="text-[11px] text-slate-500">
-                        {item.failoverTriggered ? "Có Failover Alpha→Beta · " : ""}
-                        {item.resumedChunks ? `Resume ${item.resumedChunks} chunks` : "Truyền mới 100%"}
+                        {item.failoverTriggered ? (locale === "vi" ? "Có Failover Alpha→Beta · " : "Failover triggered · ") : ""}
+                        {item.resumedChunks ? (locale === "vi" ? `Resume ${item.resumedChunks} chunks` : `Resumed ${item.resumedChunks} chunks`) : (locale === "vi" ? "Truyền mới 100%" : "Fresh transfer 100%")}
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100">
+                    <td className="px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100 font-semibold">
                       {formatBytes(item.totalBytes)}
                     </td>
-                    <td className="hidden px-4 py-3 font-mono tabular-nums whitespace-nowrap text-slate-500 sm:table-cell">
-                      {formatDateTimeVi(item.timestamp)}
+                    <td className="hidden px-5 py-3.5 font-mono tabular-nums whitespace-nowrap text-slate-500 sm:table-cell">
+                      {formatDate(item.timestamp)}
                     </td>
                   </tr>
                 ))}

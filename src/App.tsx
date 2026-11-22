@@ -33,6 +33,11 @@ import {
   toggleThemeMode,
   type ThemeMode,
 } from "./lib/theme";
+import {
+  persistLocale,
+  resolveInitialLocale,
+  type Locale,
+} from "./lib/i18n";
 import type { NavDestinationId } from "./types/navigation";
 
 function readInitialQueryParams(): {
@@ -65,6 +70,10 @@ export const App: React.FC = () => {
     );
   });
 
+  const [locale, setLocale] = useState<Locale>(() => {
+    return resolveInitialLocale(typeof window !== "undefined" ? window.localStorage : null);
+  });
+
   const [bridgeHealthy, setBridgeHealthy] = useState<boolean | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatusResponse | null>(null);
   const [relayProfile, setRelayProfile] = useState<RelayProfileMode>(() => loadRelayProfile());
@@ -85,6 +94,13 @@ export const App: React.FC = () => {
     applyThemeToDocument(theme);
     persistTheme(theme, window.localStorage);
   }, [theme]);
+
+  useEffect(() => {
+    persistLocale(locale, window.localStorage);
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = locale;
+    }
+  }, [locale]);
 
   const loadBridge = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -113,6 +129,10 @@ export const App: React.FC = () => {
 
   const handleToggleTheme = () => {
     setTheme((prev) => toggleThemeMode(prev));
+  };
+
+  const handleToggleLocale = () => {
+    setLocale((prev) => (prev === "vi" ? "en" : "vi"));
   };
 
   const handleChangeRelayProfile = (next: RelayProfileMode) => {
@@ -153,16 +173,19 @@ export const App: React.FC = () => {
       onSelectNav={setActiveNav}
       theme={theme}
       onToggleTheme={handleToggleTheme}
+      locale={locale}
+      onToggleLocale={handleToggleLocale}
       bridgeHealthy={bridgeHealthy}
       relayProfile={relayProfile}
       deviceAlias={deviceAlias}
       topBarAction={<PWAInstallButton compact />}
     >
       {showInspectorSplit ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_370px] xl:items-start">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
           <div>
             {activeNav === "send" ? (
               <SendView
+                locale={locale}
                 bridgeConfig={bridgeConfig}
                 deviceAlias={deviceAlias}
                 relayProfile={relayProfile}
@@ -175,6 +198,7 @@ export const App: React.FC = () => {
               />
             ) : (
               <ReceiveView
+                locale={locale}
                 bridgeConfig={bridgeConfig}
                 deviceAlias={deviceAlias}
                 relayProfile={relayProfile}
@@ -197,11 +221,13 @@ export const App: React.FC = () => {
                 type="button"
                 aria-expanded={mobileInspectorOpen}
                 onClick={() => setMobileInspectorOpen((prev) => !prev)}
-                className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-200/80 bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-xs dark:border-slate-800/80 dark:bg-slate-900/95 dark:text-slate-100"
               >
                 <span className="inline-flex items-center gap-2">
                   <Activity className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
-                  Bảng soi giao thức trực tiếp (PAKE · Chunk · Speed)
+                  {locale === "vi"
+                    ? "Bảng soi giao thức trực tiếp (PAKE · Chunk · Tốc độ)"
+                    : "Live Protocol Inspector (PAKE · Chunk · Speed)"}
                 </span>
                 {mobileInspectorOpen ? (
                   <ChevronUp className="h-4 w-4" aria-hidden="true" />
@@ -211,18 +237,19 @@ export const App: React.FC = () => {
               </button>
               {mobileInspectorOpen && (
                 <div className="mt-3">
-                  <ProtocolInspector />
+                  <ProtocolInspector locale={locale} />
                 </div>
               )}
             </div>
 
             <div className="hidden xl:block">
-              <ProtocolInspector />
+              <ProtocolInspector locale={locale} />
             </div>
           </div>
         </div>
       ) : activeNav === "relays" ? (
         <RelaysView
+          locale={locale}
           bridgeConfig={bridgeConfig}
           relayStatus={bridgeStatus}
           relayProfile={relayProfile}
@@ -231,6 +258,7 @@ export const App: React.FC = () => {
         />
       ) : activeNav === "history" ? (
         <HistoryGroupView
+          locale={locale}
           deviceAlias={deviceAlias}
           onUpdateDeviceAlias={handleUpdateDeviceAlias}
           history={history}
@@ -241,6 +269,7 @@ export const App: React.FC = () => {
         />
       ) : (
         <AppDocsHubView
+          locale={locale}
           history={history}
           deviceAlias={deviceAlias}
           onHistoryUpdated={handleRefreshHistory}

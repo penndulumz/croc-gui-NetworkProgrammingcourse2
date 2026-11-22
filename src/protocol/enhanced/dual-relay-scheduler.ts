@@ -1,13 +1,42 @@
+/**
+ * @file dual-relay-scheduler.ts
+ * @description State machine for dual-relay chunk scheduling and dynamic failover.
+ *
+ * Architecture & Mechanism:
+ * In standard single-relay transfers, if a network bottleneck or socket disconnection
+ * occurs on the relay, the transfer stalls or must restart from scratch.
+ *
+ * CrocFlow dual-relay architecture runs two concurrent relay pipelines:
+ *   - Lane Alpha (Relay 1): Assigned even chunk indices (0, 2, 4, 6...)
+ *   - Lane Beta (Relay 2): Assigned odd chunk indices (1, 3, 5, 7...)
+ *
+ * Key characteristics:
+ *   1. Bandwidth Multiplexing: Transfers stream across two separate routes concurrently.
+ *   2. Dynamic Failover: If Relay Alpha drops mid-stream, triggerAlphaFailover() reroutes
+ *      all undelivered Alpha chunks to Relay Beta without losing chunks already delivered.
+ */
+
 export type RelayLane = "alpha" | "beta";
 
+/**
+ * Metadata tracked for every chunk during the scheduled transfer.
+ */
 export interface ScheduledChunk {
+  /** Global sequence index across the entire manifest (0, 1, 2, ... N) */
   globalIndex: number;
+  /** Initial planned lane based on parity (even -> alpha, odd -> beta) */
   initialLane: RelayLane;
+  /** Current active lane (may change to 'beta' during failover) */
   activeLane: RelayLane;
+  /** Lifecycle state: pending -> in-flight -> delivered (or rerouted) */
   status: "pending" | "in-flight" | "delivered" | "rerouted";
+  /** Flag marking whether this chunk was saved from a failed relay */
   rerouted: boolean;
 }
 
+/**
+ * High-level observability telemetry snapshot emitted to UI inspectors and debug logs.
+ */
 export interface DualRelaySnapshot {
   dualEnabled: boolean;
   alphaAlive: boolean;
@@ -32,6 +61,11 @@ export class DualRelayScheduler {
   private betaDelivered = 0;
   private failoverReroutedCount = 0;
 
+  /**
+   * Initializes the scheduler with chunk indices.
+   * If dualEnabled is true, even chunks map to Alpha, odd chunks map to Beta.
+   * If dualEnabled is false (single-relay fallback), all chunks map to Alpha.
+   */
   constructor(chunkIndices: number[], dualEnabled = true) {
     this.dualEnabled = dualEnabled;
     for (const idx of chunkIndices) {
@@ -46,11 +80,21 @@ export class DualRelayScheduler {
     }
   }
 
+  /**
+   * Static deterministic lane mapping:
+   * Even chunks (0, 2, 4...) -> Lane Alpha
+   * Odd chunks (1, 3, 5...) -> Lane Beta
+   */
   static laneForChunk(globalIndex: number, dualEnabled = true): RelayLane {
     if (!dualEnabled) return "alpha";
     return globalIndex % 2 === 0 ? "alpha" : "beta";
   }
 
+  /**
+   * Fetches the next available chunk for a specific relay lane.
+   * Marks the chunk as "in-flight" to prevent duplicate concurrent dispatches.
+   * Returns null if lane is offline or no chunks are pending for it.
+   */
   nextForLane(lane: RelayLane): ScheduledChunk | null {
     if (lane === "alpha" && !this.alphaAlive) return null;
     if (lane === "beta" && !this.betaAlive) return null;
@@ -64,6 +108,10 @@ export class DualRelayScheduler {
     return null;
   }
 
+  /**
+   * Records chunk delivery receipt upon SHA-256 verification.
+   * Increments lane metrics and ensures idempotency (already delivered chunks are ignored).
+   */
   markDelivered(globalIndex: number, deliveredOnLane: RelayLane): boolean {
     const item = this.items.get(globalIndex);
     if (!item || item.status === "delivered") return false;
@@ -77,6 +125,8 @@ export class DualRelayScheduler {
   /**
    * Simulates or reacts to Relay Alpha disconnect. Every pending or in-flight
    * even chunk assigned to Alpha is immediately rerouted to Relay Beta.
+   *
+   * @returns Array of chunk indices successfully reassigned to Beta
    */
   triggerAlphaFailover(): number[] {
     if (!this.alphaAlive) return [];

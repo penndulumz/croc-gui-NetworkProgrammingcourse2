@@ -49,6 +49,8 @@ import {
   probePublicRelays,
   type RelayProfileMode,
 } from "../lib/relay-manager";
+import type { Locale } from "../lib/i18n";
+import { getTranslations } from "../lib/i18n";
 
 export interface SendViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -60,6 +62,7 @@ export interface SendViewProps {
   onHistoryUpdated: () => void;
   selectedPeer?: PeerPreset;
   onClearSelectedPeer?: () => void;
+  locale?: Locale;
 }
 
 type SendMode = "standard" | "enhanced";
@@ -75,7 +78,9 @@ export function SendView({
   onHistoryUpdated,
   selectedPeer,
   onClearSelectedPeer,
+  locale = "vi",
 }: SendViewProps) {
+  const t = getTranslations(locale);
   const [mode, setMode] = useState<SendMode>("enhanced");
   const [payloadKind, setPayloadKind] = useState<StandardPayloadKind>("files");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -471,10 +476,10 @@ export function SendView({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Gửi tệp & thư mục mã hóa
+            {t.send.title}
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Mã hóa đầu cuối trên thiết bị trước khi đi qua Relay — hỗ trợ cả Croc CLI gốc và chế độ 2 Relay nâng cao.
+            {t.send.subtitle}
           </p>
         </div>
       </div>
@@ -482,8 +487,8 @@ export function SendView({
       {/* Mode Switcher */}
       <div
         role="tablist"
-        aria-label="Chọn chế độ giao thức gửi"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        aria-label="Send protocol mode"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2"
       >
         <button
           type="button"
@@ -494,10 +499,10 @@ export function SendView({
             setMode("standard");
             void autoGenerateCode("standard");
           }}
-          className={`flex min-h-[54px] items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             mode === "standard"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
           }`}
         >
           <ShieldCheck
@@ -509,11 +514,14 @@ export function SendView({
             aria-hidden="true"
           />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Chuẩn Croc v11 (Tương thích CLI & Web)
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <span>{t.send.modeStandardTitle}</span>
+              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
+                CLI
+              </span>
             </div>
-            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Gửi tệp hoặc văn bản cho máy cài <code className="font-mono">croc</code> CLI và getcroc.com
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.send.modeStandardDesc}
             </div>
           </div>
         </button>
@@ -524,10 +532,10 @@ export function SendView({
           aria-selected={mode === "enhanced"}
           disabled={busy}
           onClick={() => setMode("enhanced")}
-          className={`flex min-h-[54px] items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             mode === "enhanced"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
           }`}
         >
           <Layers
@@ -539,11 +547,14 @@ export function SendView({
             aria-hidden="true"
           />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Nâng cao CrocFlow (Thư mục · 2 Relay · Resume)
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <span>{t.send.modeEnhancedTitle}</span>
+              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
+                Dual-Relay
+              </span>
             </div>
-            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Folder Manifest SHA-256 · Chunk chẵn Alpha / lẻ Beta · Tự động Failover
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.send.modeEnhancedDesc}
             </div>
           </div>
         </button>

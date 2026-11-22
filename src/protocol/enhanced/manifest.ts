@@ -1,3 +1,17 @@
+/**
+ * @file manifest.ts
+ * @description Hierarchical folder manifest builder, path sanitizer, and delta resume planner.
+ *
+ * Security & Chunking Overview:
+ * 1. Path Traversal Defense (CWE-22): Prevents malicious relative paths (e.g. `../../etc/passwd`).
+ *    sanitizeRelativePath() strips null bytes, backslashes, drive prefixes, and rejects ".." traversal tokens.
+ *
+ * 2. Content-Addressed Chunking: Large files are split into fixed-size chunks (default: 64 KB).
+ *    Each chunk receives a cryptographic SHA-256 hash. computeResumePlan() compares incoming
+ *    chunk hashes against locally saved chunks, skipping completed chunks and transmitting
+ *    only what remains.
+ */
+
 export interface ManifestChunkDescriptor {
   globalIndex: number;
   fileIndex: number;
@@ -48,6 +62,10 @@ export interface ResumePlan {
   bytesRemaining: number;
 }
 
+/**
+ * Validates and normalizes relative file paths, rejecting any path traversal attempts.
+ * Defense against CWE-22 (Zip Slip / Directory Traversal).
+ */
 export function sanitizeRelativePath(rawPath: string): string {
   const normalized = rawPath.replace(/\\/g, "/").trim();
   if (!normalized) {

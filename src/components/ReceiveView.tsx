@@ -52,6 +52,8 @@ import {
   loadRelayLatencies,
   type RelayProfileMode,
 } from "../lib/relay-manager";
+import type { Locale } from "../lib/i18n";
+import { getTranslations } from "../lib/i18n";
 
 export interface ReceiveViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -62,6 +64,7 @@ export interface ReceiveViewProps {
   prefillMode?: "standard" | "enhanced";
   onClearPrefill?: () => void;
   onHistoryUpdated: () => void;
+  locale?: Locale;
 }
 
 type ReceiveMode = "standard" | "enhanced";
@@ -299,7 +302,9 @@ export function ReceiveView({
   prefillMode,
   onClearPrefill,
   onHistoryUpdated,
+  locale = "vi",
 }: ReceiveViewProps) {
+  const t = getTranslations(locale);
   const [mode, setMode] = useState<ReceiveMode>(prefillMode ?? "enhanced");
   const [codephrase, setCodephrase] = useState(prefillCode ?? "");
   const [dualRelay, setDualRelay] = useState(true);
@@ -569,18 +574,18 @@ export function ReceiveView({
     <div className="space-y-5">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Nhận tệp & thư mục mã hóa
+          {t.receive.title}
         </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Nhập Codephrase từ người gửi hoặc mở trực tiếp từ mã QR. Dữ liệu chỉ được giải mã sau khi xác thực PAKE 2 chiều.
+          {t.receive.subtitle}
         </p>
       </div>
 
       {/* Mode Switcher */}
       <div
         role="tablist"
-        aria-label="Chọn chế độ nhận"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        aria-label="Receive protocol mode"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2"
       >
         <button
           type="button"
@@ -588,24 +593,27 @@ export function ReceiveView({
           aria-selected={mode === "standard"}
           disabled={busy}
           onClick={() => setMode("standard")}
-          className={`flex min-h-[54px] items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             mode === "standard"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
           }`}
         >
           <ShieldCheck
             className={`mt-0.5 h-5 w-5 shrink-0 ${
-              mode === "standard" ? "text-teal-600 dark:text-teal-400" : "text-slate-400"
+              mode === "standard" ? "text-teal-600 dark:text-teal-400" : "text-slate-400 dark:text-slate-500"
             }`}
             aria-hidden="true"
           />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Chuẩn Croc v11
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <span>{t.send.modeStandardTitle}</span>
+              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
+                CLI
+              </span>
             </div>
-            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Nhận từ <code className="font-mono">croc send</code> trên CLI hoặc getcroc.com
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.send.modeStandardDesc}
             </div>
           </div>
         </button>
@@ -616,24 +624,27 @@ export function ReceiveView({
           aria-selected={mode === "enhanced"}
           disabled={busy}
           onClick={() => setMode("enhanced")}
-          className={`flex min-h-[54px] items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+          className={`flex min-h-[56px] items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             mode === "enhanced"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900 dark:hover:bg-slate-800/70"
           }`}
         >
           <Layers
             className={`mt-0.5 h-5 w-5 shrink-0 ${
-              mode === "enhanced" ? "text-teal-600 dark:text-teal-400" : "text-slate-400"
+              mode === "enhanced" ? "text-teal-600 dark:text-teal-400" : "text-slate-400 dark:text-slate-500"
             }`}
             aria-hidden="true"
           />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Nâng cao CrocFlow (2 Relay & Resume)
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <span>{t.send.modeEnhancedTitle}</span>
+              <span className="rounded-full bg-teal-100 dark:bg-teal-900 px-1.5 py-0.5 text-[10px] font-mono text-teal-800 dark:text-teal-200">
+                Dual-Relay
+              </span>
             </div>
-            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Tự kiểm tra IndexedDB Resume Cache để bỏ qua chunk đã tải trước đó
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.send.modeEnhancedDesc}
             </div>
           </div>
         </button>

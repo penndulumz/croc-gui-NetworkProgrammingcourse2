@@ -22,6 +22,8 @@ import {
   type RelayProfileMode,
 } from "../lib/relay-manager";
 import { formatBytes } from "../lib/format";
+import type { Locale } from "../lib/i18n";
+import { getTranslations } from "../lib/i18n";
 
 export interface RelaysViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -29,16 +31,21 @@ export interface RelaysViewProps {
   relayProfile: RelayProfileMode;
   onChangeRelayProfile: (mode: RelayProfileMode) => void;
   onRefreshStatus: () => void;
+  locale?: Locale;
 }
 
 function buildInitialNodes(
   bridgeConfig: BridgePublicConfig | null,
   customRelays: CustomRelayConfig[],
+  locale: Locale = "vi",
 ): RelayNodeEntry[] {
+  const isVi = locale === "vi";
   const nodes: RelayNodeEntry[] = [
     {
       id: "local-alpha",
-      name: "Relay Alpha (Local Lab · Chunk Chẵn 0,2,4...)",
+      name: isVi
+        ? "Relay Alpha (Local Lab · Chunk Chẵn 0,2,4...)"
+        : "Relay Alpha (Local Lab · Even Chunks 0,2,4...)",
       host: "127.0.0.1",
       port: "3000/ws-dual?channel=alpha",
       address: "local://relay-alpha",
@@ -48,7 +55,9 @@ function buildInitialNodes(
     },
     {
       id: "local-beta",
-      name: "Relay Beta (Local Lab · Chunk Lẻ 1,3,5...)",
+      name: isVi
+        ? "Relay Beta (Local Lab · Chunk Lẻ 1,3,5...)"
+        : "Relay Beta (Local Lab · Odd Chunks 1,3,5...)",
       host: "127.0.0.1",
       port: "3000/ws-dual?channel=beta",
       address: "local://relay-beta",
@@ -65,7 +74,12 @@ function buildInitialNodes(
     const port = lastColon > 0 ? addr.slice(lastColon + 1) : "9009";
     nodes.push({
       id: `public-${idx}`,
-      name: idx === 0 ? "Croc Public Relay #1 (Chính)" : `Croc Public Relay #${idx + 1}`,
+      name:
+        idx === 0
+          ? isVi
+            ? "Croc Public Relay #1 (Chính)"
+            : "Croc Public Relay #1 (Primary)"
+          : `Croc Public Relay #${idx + 1}`,
       host,
       port,
       address: addr,
@@ -92,16 +106,23 @@ function buildInitialNodes(
   return nodes;
 }
 
+/**
+ * Relay & Network Monitoring View.
+ * Displays latency telemetry, allows switching between Public relays and Local Dual-Relay Lab,
+ * measures real-time RTT pings across all configured endpoints, and supports custom self-hosted relays.
+ */
 export function RelaysView({
   bridgeConfig,
   relayStatus,
   relayProfile,
   onChangeRelayProfile,
   onRefreshStatus,
+  locale = "vi",
 }: RelaysViewProps) {
+  const t = getTranslations(locale);
   const [customRelays, setCustomRelays] = useState<CustomRelayConfig[]>(() => loadCustomRelays());
   const [nodes, setNodes] = useState<RelayNodeEntry[]>(() =>
-    buildInitialNodes(bridgeConfig, loadCustomRelays()),
+    buildInitialNodes(bridgeConfig, loadCustomRelays(), locale),
   );
   const [probing, setProbing] = useState(false);
 
@@ -114,19 +135,19 @@ export function RelaysView({
   useEffect(() => {
     setNodes((prev) => {
       const prevMap = new Map(prev.map((n) => [n.id, n]));
-      const rebuilt = buildInitialNodes(bridgeConfig, customRelays).map((fresh) => {
+      const rebuilt = buildInitialNodes(bridgeConfig, customRelays, locale).map((fresh) => {
         const old = prevMap.get(fresh.id);
         return old ? { ...fresh, rttMs: old.rttMs, status: old.status, error: old.error } : fresh;
       });
       return rebuilt;
     });
-  }, [bridgeConfig, customRelays]);
+  }, [bridgeConfig, customRelays, locale]);
 
   const handleProbeAll = useCallback(async () => {
     setProbing(true);
     setNodes((prev) => prev.map((n) => ({ ...n, status: "probing", error: undefined })));
 
-    const current = buildInitialNodes(bridgeConfig, customRelays);
+    const current = buildInitialNodes(bridgeConfig, customRelays, locale);
     const probed = await Promise.all(
       current.map(async (node): Promise<RelayNodeEntry> => {
         try {
@@ -142,7 +163,7 @@ export function RelaysView({
             ...node,
             rttMs: null,
             status: "offline",
-            error: err instanceof Error ? err.message : "Lỗi đo mạng",
+            error: err instanceof Error ? err.message : (locale === "vi" ? "Lỗi đo mạng" : "Ping error"),
           };
         }
       }),
@@ -164,7 +185,7 @@ export function RelaysView({
     setNodes(rankRelaysByLatency(probed));
     onRefreshStatus();
     setProbing(false);
-  }, [bridgeConfig, customRelays, onRefreshStatus]);
+  }, [bridgeConfig, customRelays, onRefreshStatus, locale]);
 
   const handleAddCustomRelay = (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,11 +194,19 @@ export function RelaysView({
     const host = newHost.trim();
     const port = newPort.trim();
     if (!name || !host) {
-      setFormError("Vui lòng nhập Tên hiển thị và Địa chỉ Host/Domain của Relay.");
+      setFormError(
+        locale === "vi"
+          ? "Vui lòng nhập Tên hiển thị và Địa chỉ Host/Domain của Relay."
+          : "Please provide both Display Name and Host/Domain.",
+      );
       return;
     }
     if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
-      setFormError("Cổng (Port) phải là số hợp lệ từ 1 đến 65535.");
+      setFormError(
+        locale === "vi"
+          ? "Cổng (Port) phải là số hợp lệ từ 1 đến 65535."
+          : "Port must be a valid integer between 1 and 65535.",
+      );
       return;
     }
     const next: CustomRelayConfig[] = [
@@ -204,24 +233,25 @@ export function RelaysView({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Top Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Relay & Đo độ trễ mạng
+            {t.relays.title}
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Đo thời gian phản hồi RTT (ms) tới cụm Relay công cộng và cặp Local Dual-Relay Lab (Alpha & Beta).
+            {t.relays.subtitle}
           </p>
         </div>
         <button
           type="button"
           disabled={probing}
           onClick={() => void handleProbeAll()}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-teal-700 disabled:opacity-60 transition-all"
         >
           <RefreshCw className={`h-4 w-4 ${probing ? "animate-spin" : ""}`} aria-hidden="true" />
-          {probing ? "Đang đo RTT…" : "Đo độ trễ (Ping RTT)"}
+          <span>{probing ? t.relays.measuring : t.relays.measureRttBtn}</span>
         </button>
       </div>
 
@@ -230,19 +260,19 @@ export function RelaysView({
         <button
           type="button"
           onClick={() => onChangeRelayProfile("public")}
-          className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
+          className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             relayProfile === "public"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900"
           }`}
         >
           <Globe className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Cụm Relay Croc Công Cộng (Chuẩn v11)
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {t.relays.profilePublic}
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Đi qua cầu nối TCP allowlisted <code className="font-mono">/ws</code> tới cụm relay chính thức của Croc để truyền qua Internet với CLI & getcroc.com.
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.relays.profilePublicDesc}
             </p>
           </div>
         </button>
@@ -250,19 +280,19 @@ export function RelaysView({
         <button
           type="button"
           onClick={() => onChangeRelayProfile("local-lab")}
-          className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
+          className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
             relayProfile === "local-dual" || relayProfile === "local-lab"
-              ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
-              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+              ? "border-teal-600 bg-teal-50/70 shadow-xs dark:border-teal-400 dark:bg-teal-950/30"
+              : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800/80 dark:bg-slate-900"
           }`}
         >
           <Server className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Local Dual-Relay Lab (Alpha & Beta)
+            <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {t.relays.profileLocalLab}
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Hai phòng Relay độc lập chạy ngay trên Bridge Server (<code className="font-mono">/ws-dual</code>) phục vụ chia tải Chunk Chẵn/Lẻ & Failover.
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t.relays.profileLocalLabDesc}
             </p>
           </div>
         </button>
@@ -270,61 +300,65 @@ export function RelaysView({
 
       {/* Live Local Dual-Relay Counters */}
       {relayStatus && (
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400">
-                Relay Alpha · Luồng Chẵn (0, 2, 4...)
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
+                {locale === "vi" ? "Relay Alpha · Luồng Chẵn (0, 2, 4...)" : "Relay Alpha · Even Stream (0, 2, 4...)"}
               </span>
               <Radio className="h-4 w-4 text-teal-600 dark:text-teal-400" aria-hidden="true" />
             </div>
-            <div className="mt-2.5 flex items-baseline gap-4 font-mono tabular-nums">
+            <div className="mt-3 flex items-baseline gap-5 font-mono tabular-nums">
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {formatBytes(relayStatus.localDualRelay.alpha.bytesRelayed)}
                 </div>
-                <div className="text-[11px] text-slate-500">Đã chuyển tiếp</div>
+                <div className="text-[11px] text-slate-500 font-sans">{t.relays.bytesRelayed}</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {relayStatus.localDualRelay.alpha.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500">Chunks (Đã chuyển)</div>
+                <div className="text-[11px] text-slate-500 font-sans">Chunks</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {relayStatus.localDualRelay.alpha.activeRooms}
                 </div>
-                <div className="text-[11px] text-slate-500">Phòng mở</div>
+                <div className="text-[11px] text-slate-500 font-sans">
+                  {locale === "vi" ? "Phòng mở" : "Active Rooms"}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-400">
-                Relay Beta · Luồng Lẻ (1, 3, 5...) + Failover
+              <span className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+                {locale === "vi" ? "Relay Beta · Luồng Lẻ (1, 3, 5...) + Failover" : "Relay Beta · Odd Stream (1, 3, 5...) + Failover"}
               </span>
               <Activity className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
             </div>
-            <div className="mt-2.5 flex items-baseline gap-4 font-mono tabular-nums">
+            <div className="mt-3 flex items-baseline gap-5 font-mono tabular-nums">
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {formatBytes(relayStatus.localDualRelay.beta.bytesRelayed)}
                 </div>
-                <div className="text-[11px] text-slate-500">Đã chuyển tiếp</div>
+                <div className="text-[11px] text-slate-500 font-sans">{t.relays.bytesRelayed}</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {relayStatus.localDualRelay.beta.chunksRelayed}
                 </div>
-                <div className="text-[11px] text-slate-500">Chunks (Đã chuyển)</div>
+                <div className="text-[11px] text-slate-500 font-sans">Chunks</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
                   {relayStatus.localDualRelay.beta.activeRooms}
                 </div>
-                <div className="text-[11px] text-slate-500">Phòng mở</div>
+                <div className="text-[11px] text-slate-500 font-sans">
+                  {locale === "vi" ? "Phòng mở" : "Active Rooms"}
+                </div>
               </div>
             </div>
           </div>
@@ -332,28 +366,30 @@ export function RelaysView({
       )}
 
       {/* Ranked Relay Table */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-          <h2 className="font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Danh sách Relay Node (Xếp hạng theo độ trễ nhanh nhất)
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
+        <div className="border-b border-slate-200/80 px-5 py-3.5 dark:border-slate-800/80">
+          <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+            {t.relays.rankTitle}
           </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                <th className="px-4 py-2.5 font-semibold">Relay Node</th>
-                <th className="hidden px-4 py-2.5 font-semibold sm:table-cell">Địa chỉ</th>
-                <th className="px-4 py-2.5 font-semibold whitespace-nowrap">Độ trễ (RTT)</th>
-                <th className="px-4 py-2.5 font-semibold whitespace-nowrap">Trạng thái</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Thao tác</th>
+              <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-500 dark:border-slate-800/80 dark:bg-slate-950/60 dark:text-slate-400">
+                <th className="px-5 py-3 font-semibold">Relay Node</th>
+                <th className="hidden px-5 py-3 font-semibold sm:table-cell">
+                  {locale === "vi" ? "Địa chỉ" : "Address"}
+                </th>
+                <th className="px-5 py-3 font-semibold whitespace-nowrap">RTT Latency</th>
+                <th className="px-5 py-3 font-semibold whitespace-nowrap">{t.common.status}</th>
+                <th className="px-5 py-3 text-right font-semibold">{t.common.actions}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {nodes.map((node) => (
-                <tr key={node.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                  <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
-                    <div>{node.name}</div>
+                <tr key={node.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-slate-100">
+                    <div className="font-semibold">{node.name}</div>
                     <div className="font-mono text-[11px] text-slate-500 sm:hidden">
                       {node.address}
                     </div>
@@ -363,46 +399,52 @@ export function RelaysView({
                       </div>
                     )}
                   </td>
-                  <td className="hidden px-4 py-3 font-mono text-slate-600 sm:table-cell dark:text-slate-400">
+                  <td className="hidden px-5 py-3.5 font-mono text-slate-600 sm:table-cell dark:text-slate-400">
                     {node.address}
                   </td>
-                  <td className="px-4 py-3 font-mono font-semibold tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100">
-                    {node.status === "probing"
-                      ? "Đang đo…"
-                      : node.rttMs !== null
-                        ? `${node.rttMs} ms`
-                        : "—"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {node.status === "online" ? (
-                      <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Sẵn sàng
+                  <td className="px-5 py-3.5 font-mono font-bold tabular-nums whitespace-nowrap text-slate-900 dark:text-slate-100">
+                    {node.status === "probing" ? (
+                      <span className="text-teal-600 dark:text-teal-400">{t.relays.measuring}</span>
+                    ) : node.rttMs !== null ? (
+                      <span className={node.rttMs < 60 ? "text-emerald-600 dark:text-emerald-400" : node.rttMs < 150 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}>
+                        {node.rttMs} ms
                       </span>
-                    ) : node.status === "offline" ? (
-                      <span className="inline-flex items-center gap-1 font-medium text-rose-600 dark:text-rose-400">
-                        <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                        Không phản hồi
-                      </span>
-                    ) : node.status === "probing" ? (
-                      <span className="text-teal-700 dark:text-teal-400">Đang kiểm tra</span>
                     ) : (
-                      <span className="text-slate-500">Chưa đo</span>
+                      "—"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    {node.status === "online" ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t.common.online}
+                      </span>
+                    ) : node.status === "offline" ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">
+                        <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t.common.offline}
+                      </span>
+                    ) : node.status === "probing" ? (
+                      <span className="text-teal-700 dark:text-teal-400">{t.relays.measuring}</span>
+                    ) : (
+                      <span className="text-slate-400">{t.common.idle}</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
                     {node.kind === "custom" ? (
                       <button
                         type="button"
                         onClick={() => handleRemoveCustomRelay(node.id)}
-                        aria-label={`Xóa relay ${node.name}`}
-                        className="inline-flex items-center gap-1 text-rose-600 hover:underline dark:text-rose-400"
+                        aria-label={`Delete relay ${node.name}`}
+                        className="inline-flex items-center gap-1 text-rose-600 hover:underline dark:text-rose-400 font-semibold"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Xóa
+                        {t.common.delete}
                       </button>
                     ) : (
-                      <span className="text-slate-400">Mặc định</span>
+                      <span className="text-slate-400 text-[11px] font-mono">
+                        {locale === "vi" ? "Mặc định" : "Default"}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -413,31 +455,33 @@ export function RelaysView({
       </section>
 
       {/* Add Custom Relay Form */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-display text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Thêm Relay tự dựng (Self-hosted Croc Relay)
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
+        <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+          {t.relays.customModalTitle}
         </h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Lưu cấu hình máy chủ <code className="font-mono">croc relay</code> riêng của nhóm bạn để dùng cùng <code className="font-mono">CROC_RELAY_HOSTS</code> trên Bridge Server.
+          {locale === "vi"
+            ? "Lưu cấu hình máy chủ croc relay riêng của nhóm bạn để dùng cùng CROC_RELAY_HOSTS trên Bridge Server."
+            : "Save custom self-hosted croc relay endpoints to connect over the Bridge Server."}
         </p>
 
-        <form onSubmit={handleAddCustomRelay} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <form onSubmit={handleAddCustomRelay} className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-4">
           <div>
-            <label htmlFor="custom-relay-name" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-              Tên hiển thị
+            <label htmlFor="custom-relay-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {t.relays.customNameLabel}
             </label>
             <input
               id="custom-relay-name"
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="VPS Nhóm 4"
-              className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              placeholder="e.g. Lab VPS #1"
+              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
             />
           </div>
           <div>
-            <label htmlFor="custom-relay-host" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-              Host / Domain
+            <label htmlFor="custom-relay-host" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {t.relays.customHostLabel}
             </label>
             <input
               id="custom-relay-host"
@@ -445,12 +489,12 @@ export function RelaysView({
               value={newHost}
               onChange={(e) => setNewHost(e.target.value)}
               placeholder="relay.example.com"
-              className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
             />
           </div>
           <div>
-            <label htmlFor="custom-relay-port" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
-              Cổng TCP
+            <label htmlFor="custom-relay-port" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              {t.relays.customPortLabel}
             </label>
             <input
               id="custom-relay-port"
@@ -458,21 +502,21 @@ export function RelaysView({
               value={newPort}
               onChange={(e) => setNewPort(e.target.value)}
               placeholder="9009"
-              className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-mono text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 focus:outline-teal-600"
             />
           </div>
           <div className="flex items-end">
             <button
               type="submit"
-              className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+              className="inline-flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 shadow-xs transition-colors"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Lưu Relay
+              <span>{t.relays.saveRelayBtn}</span>
             </button>
           </div>
         </form>
         {formError && (
-          <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+          <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400 font-semibold">
             {formError}
           </p>
         )}
