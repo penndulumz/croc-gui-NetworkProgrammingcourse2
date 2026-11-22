@@ -1031,7 +1031,7 @@ export function SendView({
               className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-teal-700"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
-              Bắt đầu gửi mã hóa
+              {t.send.startSendBtn}
             </button>
           ) : (
             <>
@@ -1041,7 +1041,7 @@ export function SendView({
                 className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
-                Hủy phiên truyền
+                {t.send.cancelBtn}
               </button>
               {mode === "enhanced" && dualRelay && (
                 <button
@@ -1050,7 +1050,7 @@ export function SendView({
                   className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-amber-500/50 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-400/40 dark:bg-amber-950/50 dark:text-amber-200"
                 >
                   <WifiOff className="h-4 w-4" aria-hidden="true" />
-                  Mô phỏng ngắt Relay Alpha (Failover)
+                  {t.send.simulateFailoverBtn}
                 </button>
               )}
             </>

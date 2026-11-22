@@ -94,3 +94,22 @@ test("getTranslations returns matching translations", () => {
   assert.equal(enT.common.appName, "CrocFlow");
   assert.equal(enT.common.english, "English");
 });
+
+test("all action button translations strictly enforce 1 to 3 word economy", () => {
+  const checkButtons = (obj: Record<string, any>, lang: string, path = "") => {
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === "object" && value !== null) {
+        checkButtons(value, lang, `${path}.${key}`);
+      } else if (key.endsWith("Btn")) {
+        const words = value.trim().split(/\s+/).filter(Boolean);
+        assert.ok(
+          words.length >= 1 && words.length <= 3,
+          `Button label '${value}' at ${path}.${key} in ${lang} has ${words.length} words; expected 1-3 words`,
+        );
+      }
+    }
+  };
+
+  checkButtons(DICTIONARY.vi, "vi");
+  checkButtons(DICTIONARY.en, "en");
+});
