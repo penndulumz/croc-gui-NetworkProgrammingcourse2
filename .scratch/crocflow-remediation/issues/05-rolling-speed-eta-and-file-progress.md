@@ -4,10 +4,10 @@
 
 **Blocked by:** 01: Domain Vocabulary Normalization, Branded Codephrase & Bridge Client Unification
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Rolling 3-second window throughput calculator implemented in `src/lib/metrics.ts`.
-- [ ] ETA calculation implemented with pause and zero-throughput handling.
-- [ ] Speed and ETA rendered in real-time in both `SendView` and `ReceiveView` across Standard and Enhanced modes.
-- [ ] Granular per-file progress bars rendered during multi-file transfers.
-- [ ] Unit tests verify throughput windowing, ETA formatting, and stall handling.
+- [x] Rolling 3-second window throughput calculator implemented in `src/lib/metrics.ts`.
+- [x] ETA calculation implemented with pause and zero-throughput handling.
+- [x] Speed and ETA rendered in real-time in both `SendView` and `ReceiveView` across Standard and Enhanced modes.
+- [x] Granular per-file progress bars rendered during multi-file transfers.
+- [x] Unit tests verify throughput windowing, ETA formatting, and stall handling.

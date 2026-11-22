@@ -104,6 +104,10 @@ export class DualRelayScheduler {
     return true;
   }
 
+  isDelivered(globalIndex: number): boolean {
+    return this.items.get(globalIndex)?.status === "delivered";
+  }
+
   getSnapshot(): DualRelaySnapshot {
     let deliveredCount = 0;
     for (const item of this.items.values()) {

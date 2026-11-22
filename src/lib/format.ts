@@ -11,10 +11,7 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
-export function formatSpeed(bytesPerSecond: number): string {
-  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "0 B/s";
-  return `${formatBytes(bytesPerSecond)}/s`;
-}
+export { formatSpeed } from "./metrics";
 
 export function formatTimeShort(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString("vi-VN", {

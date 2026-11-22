@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Archive,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { receiveFiles } from "../protocol/croc/client";
 import { DownloadDestination, TextDestination } from "../protocol/croc/storage";
-import type { FileProgress, TransferOffer } from "../protocol/croc/types";
+import type { FileProgress as CrocFileProgress, OfferedFile, TransferOffer } from "../protocol/croc/types";
 import {
   receiveEnhancedTransfer,
   type EnhancedProgress,
@@ -31,7 +31,14 @@ import {
 import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
 import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
-import { downloadBinaryFile, formatBytes, formatSpeed } from "../lib/format";
+import { downloadBinaryFile, formatBytes } from "../lib/format";
+import {
+  RollingMetricsTracker,
+  formatEta,
+  formatSpeed,
+  calculateFileProgress,
+  type FileProgress,
+} from "../lib/metrics";
 import { downloadZipArchive, saveEntriesToDirectory, type ZipEntry } from "../lib/zip";
 import type { RelayProfileMode } from "../lib/relay-manager";
 
@@ -78,8 +85,19 @@ export function ReceiveView({
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
 
-  const [stdProgress, setStdProgress] = useState<FileProgress | null>(null);
+  const [stdProgress, setStdProgress] = useState<CrocFileProgress | null>(null);
   const [enhProgress, setEnhProgress] = useState<EnhancedProgress | null>(null);
+  const [offeredFiles, setOfferedFiles] = useState<OfferedFile[] | null>(null);
+  const [metrics, setMetrics] = useState<{
+    speedBps: number;
+    etaSeconds: number | null;
+    isStalled: boolean;
+  }>({
+    speedBps: 0,
+    etaSeconds: null,
+    isStalled: false,
+  });
+  const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
   const [pendingStdOffer, setPendingStdOffer] = useState<PendingStandardOffer | null>(null);
   const [pendingEnhOffer, setPendingEnhOffer] = useState<PendingEnhancedOffer | null>(null);
 
@@ -112,6 +130,16 @@ export function ReceiveView({
     void refreshCacheSummary();
   }, []);
 
+  useEffect(() => {
+    if (!busy) return;
+    const interval = setInterval(() => {
+      if (metricsTrackerRef.current) {
+        setMetrics(metricsTrackerRef.current.getSnapshot());
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [busy]);
+
   const handleClearCache = async () => {
     await clearResumeCache();
     await refreshCacheSummary();
@@ -132,6 +160,9 @@ export function ReceiveView({
     setSuccessText(null);
     setStdProgress(null);
     setEnhProgress(null);
+    setOfferedFiles(null);
+    metricsTrackerRef.current = new RollingMetricsTracker();
+    setMetrics({ speedBps: 0, etaSeconds: null, isStalled: false });
     setReceivedText(null);
     setReceivedFiles([]);
     setReceivedManifest(null);
@@ -167,8 +198,14 @@ export function ReceiveView({
           signal: controller.signal,
           callbacks: {
             onStatus: setStatusText,
-            onProgress: setStdProgress,
+            onProgress: (p) => {
+              setStdProgress(p);
+              if (metricsTrackerRef.current) {
+                setMetrics(metricsTrackerRef.current.update(p.totalBytes, p.totalSize));
+              }
+            },
             onOffer: async (incomingOffer) => {
+              setOfferedFiles(incomingOffer.files);
               const accepted = await new Promise<boolean>((resolve) => {
                 setPendingStdOffer({ offer: incomingOffer, resolve });
               });
@@ -230,7 +267,12 @@ export function ReceiveView({
         baseWsUrl: wsDualUrl,
         signal: controller.signal,
         onStatus: setStatusText,
-        onProgress: setEnhProgress,
+        onProgress: (p) => {
+          setEnhProgress(p);
+          if (metricsTrackerRef.current) {
+            setMetrics(metricsTrackerRef.current.update(p.bytesTransferred, p.totalBytes));
+          }
+        },
         onManifestOffer: (manifest, resumePlan) =>
           new Promise<boolean>((resolve) => {
             setPendingEnhOffer({ manifest, resumePlan, resolve });
@@ -279,6 +321,31 @@ export function ReceiveView({
       : mode === "enhanced" && enhProgress && enhProgress.totalChunks > 0
         ? Math.min(100, Math.round((enhProgress.completedChunks / enhProgress.totalChunks) * 100))
         : 0;
+
+  const fileProgressList = useMemo<FileProgress[]>(() => {
+    if (mode === "standard") {
+      if (!offeredFiles || offeredFiles.length <= 1 || !stdProgress) return [];
+      return calculateFileProgress(
+        offeredFiles.map((f) => ({ name: f.path, size: f.size })),
+        stdProgress.fileIndex,
+        stdProgress.fileBytes,
+      );
+    }
+    if (mode === "enhanced") {
+      if (enhProgress?.fileProgress && enhProgress.fileProgress.length > 1) {
+        return enhProgress.fileProgress;
+      }
+      if (pendingEnhOffer?.manifest && pendingEnhOffer.manifest.files.length > 1) {
+        return pendingEnhOffer.manifest.files.map((f) => ({
+          name: f.relativePath,
+          size: f.size,
+          transferred: 0,
+          done: false,
+        }));
+      }
+    }
+    return [];
+  }, [mode, offeredFiles, stdProgress, enhProgress, pendingEnhOffer]);
 
   return (
     <div className="space-y-5">
@@ -560,15 +627,108 @@ export function ReceiveView({
                 />
               </div>
             )}
+            {/* Live Metrics: Speed, ETA, Bytes */}
+            {(busy || stdProgress || enhProgress) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 dark:bg-slate-950/60">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+                  <span>
+                    <strong className="font-sans font-medium text-slate-500 dark:text-slate-400">Tốc độ:</strong>{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{formatSpeed(metrics.speedBps)}</span>
+                  </span>
+                  <span>
+                    <strong className="font-sans font-medium text-slate-500 dark:text-slate-400">Còn lại (ETA):</strong>{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {formatEta(metrics.etaSeconds, metrics.isStalled)}
+                    </span>
+                  </span>
+                  {mode === "standard" && stdProgress && stdProgress.totalSize > 0 && (
+                    <span className="text-slate-600 dark:text-slate-400">
+                      {formatBytes(stdProgress.totalBytes)} / {formatBytes(stdProgress.totalSize)}
+                    </span>
+                  )}
+                  {mode === "enhanced" && enhProgress && (
+                    <span className="text-slate-600 dark:text-slate-400">
+                      {formatBytes(enhProgress.bytesTransferred)} / {formatBytes(enhProgress.totalBytes)}
+                    </span>
+                  )}
+                </div>
+                {metrics.isStalled && (
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+                    Tạm dừng (Stalled)
+                  </span>
+                )}
+              </div>
+            )}
+
             {enhProgress && (
               <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs tabular-nums text-slate-600 dark:text-slate-400">
                 <span>
                   Chunks: {enhProgress.completedChunks}/{enhProgress.totalChunks}
                 </span>
-                <span>Tốc độ: {formatSpeed(enhProgress.speedBps)}</span>
                 <span>Alpha: {enhProgress.alphaChunks}</span>
                 <span>Beta: {enhProgress.betaChunks}</span>
-                <span>Resume: {enhProgress.resumedChunks}</span>
+                {enhProgress.failoverChunks > 0 && (
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    Failover: {enhProgress.failoverChunks}
+                  </span>
+                )}
+                {enhProgress.resumedChunks > 0 && (
+                  <span className="font-semibold text-indigo-700 dark:text-indigo-400">
+                    Resume: {enhProgress.resumedChunks}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Granular Per-File Progress Bars for Multi-File Transfers */}
+            {fileProgressList.length > 1 && (
+              <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <span>
+                    Tiến độ từng tệp ({fileProgressList.filter((f) => f.done).length}/{fileProgressList.length} hoàn tất)
+                  </span>
+                  <span className="font-mono text-[11px] text-slate-500">
+                    {Math.round(
+                      (fileProgressList.filter((f) => f.done).length / fileProgressList.length) * 100,
+                    )}
+                    %
+                  </span>
+                </div>
+                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {fileProgressList.map((fp, idx) => {
+                    const filePct =
+                      fp.size > 0
+                        ? Math.min(100, Math.round((fp.transferred / fp.size) * 100))
+                        : fp.done
+                          ? 100
+                          : 0;
+                    return (
+                      <div key={`${fp.name}-${idx}`} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <div className="flex items-center gap-1.5 truncate">
+                            {fp.done ? (
+                              <Check className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                            ) : (
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-500 animate-pulse" aria-hidden="true" />
+                            )}
+                            <span className="truncate font-mono text-slate-800 dark:text-slate-200">{fp.name}</span>
+                          </div>
+                          <div className="shrink-0 font-mono text-slate-500 dark:text-slate-400">
+                            {formatBytes(fp.transferred)} / {formatBytes(fp.size)} ({filePct}%)
+                          </div>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                          <div
+                            className={`h-full rounded-full transition-all duration-150 ${
+                              fp.done ? "bg-emerald-500" : "bg-teal-500"
+                            }`}
+                            style={{ width: `${filePct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             {errorText && (

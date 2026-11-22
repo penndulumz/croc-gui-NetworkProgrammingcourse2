@@ -11,6 +11,7 @@ import {
 import { DualRelayScheduler, type RelayLane } from "./dual-relay-scheduler";
 import { clearResumeCache, loadVerifiedChunkMap, saveVerifiedChunk } from "./resume-cache";
 import { protocolEventBus } from "../event-bus";
+import { calculateManifestFileProgress, type FileProgress } from "../../lib/metrics";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -60,6 +61,7 @@ export interface EnhancedProgress {
   betaChunks: number;
   failoverChunks: number;
   alphaAlive: boolean;
+  fileProgress?: FileProgress[];
 }
 
 export interface ReceivedEnhancedFile {
@@ -718,6 +720,22 @@ export async function sendEnhancedTransfer(options: {
       if (emitInspector) {
         protocolEventBus.recordThroughput(bytesTransferred, manifest.totalBytes, speedBps);
       }
+      const completedSet = new Set<number>();
+      for (const idx of missingIndices) {
+        if (scheduler?.isDelivered(idx)) {
+          completedSet.add(idx);
+        }
+      }
+      for (const c of manifest.chunks) {
+        if (!missingIndices.includes(c.globalIndex)) {
+          completedSet.add(c.globalIndex);
+        }
+      }
+      const fileProgress = calculateManifestFileProgress(
+        manifest.files,
+        manifest.chunks,
+        completedSet,
+      );
       onProgress?.({
         completedChunks: skippedCount + snap.deliveredCount,
         totalChunks: manifest.totalChunks,
@@ -729,6 +747,7 @@ export async function sendEnhancedTransfer(options: {
         betaChunks: snap.betaDelivered,
         failoverChunks: snap.failoverReroutedCount,
         alphaAlive: snap.alphaAlive,
+        fileProgress,
       });
     };
 
@@ -1174,6 +1193,15 @@ export async function receiveEnhancedTransfer(options: {
       }
 
       const elapsedSec = Math.max(0.05, (Date.now() - startedAt) / 1000);
+      const completedSet = new Set<number>(chunkBuffers.keys());
+      for (const c of resumePlan.skippedChunks) {
+        completedSet.add(c.globalIndex);
+      }
+      const fileProgress = calculateManifestFileProgress(
+        manifest.files,
+        manifest.chunks,
+        completedSet,
+      );
       onProgress?.({
         completedChunks: chunkBuffers.size,
         totalChunks: manifest.totalChunks,
@@ -1185,6 +1213,7 @@ export async function receiveEnhancedTransfer(options: {
         betaChunks: betaReceived,
         failoverChunks: failoverReceived,
         alphaAlive: Boolean(alphaConn?.alive),
+        fileProgress,
       });
 
       if (typeof stopAfterChunks === "number" && networkChunksReceived >= stopAfterChunks) {
