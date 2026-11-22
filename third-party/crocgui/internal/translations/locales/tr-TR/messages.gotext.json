@@ -1,0 +1,180 @@
+{
+    "language": "tr-TR",
+    "messages": [
+        {
+            "id": "Debug log:",
+            "message": "Debug log:",
+            "translation": "Hata ayıklama günlüğü"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "İndirmek için kodu girin"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "Almak"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "Kod al"
+        },
+        {
+            "id": "Download",
+            "message": "Download",
+            "translation": "İndir"
+        },
+        {
+            "id": "Receiving file",
+            "message": "Receiving file",
+            "translation": "Dosya alma"
+        },
+        {
+            "id": "Received",
+            "message": "Received",
+            "translation": "Alınan"
+        },
+        {
+            "id": "Pick a file to send",
+            "message": "Pick a file to send",
+            "translation": "Gönderilicek dosyayı seçin"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "Gönder"
+        },
+        {
+            "id": "Sending file",
+            "message": "Sending file",
+            "translation": "Dosya gönderiliyor"
+        },
+        {
+            "id": "Sent file",
+            "message": "Sent file",
+            "translation": "Dosya gönderildi"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Gönderme iptal edildi"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "İptal"
+        },
+        {
+            "id": "Send Code",
+            "message": "Send Code",
+            "translation": "Kod gönder"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Hata ayıklama günlüğünü etkinleştir"
+        },
+        {
+            "id": "Settings",
+            "message": "Settings",
+            "translation": "Ayarlar"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "Dil"
+        },
+        {
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": "Görünüş"
+        },
+        {
+            "id": "Theme",
+            "message": "Theme",
+            "translation": "Tema"
+        },
+        {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": "Röle"
+        },
+        {
+            "id": "Address",
+            "message": "Address",
+            "translation": "Adres"
+        },
+        {
+            "id": "Ports",
+            "message": "Ports",
+            "translation": "Bağlantı noktası"
+        },
+        {
+            "id": "Password",
+            "message": "Password",
+            "translation": "Şifre"
+        },
+        {
+            "id": "Network Local",
+            "message": "Network Local",
+            "translation": "Yerel ağ"
+        },
+        {
+            "id": "Disable Local",
+            "message": "Disable Local",
+            "translation": "Yerel devre dışı"
+        },
+        {
+            "id": "Force Local Only",
+            "message": "Force Local Only",
+            "translation": "Yalnızca yerel olarak zorla"
+        },
+        {
+            "id": "Transfer Options",
+            "message": "Transfer Options",
+            "translation": "Transfer seçenekleri"
+        },
+        {
+            "id": "PAKE Curve",
+            "message": "PAKE Curve",
+            "translation": "PAKR eğrisi"
+        },
+        {
+            "id": "Hash Algorithm",
+            "message": "Hash Algorithm",
+            "translation": "Karma algoritma"
+        },
+        {
+            "id": "Disable Multiplexing",
+            "message": "Disable Multiplexing",
+            "translation": "Çoğullamayı devre dışı bırak"
+        },
+        {
+            "id": "Disable Compression",
+            "message": "Disable Compression",
+            "translation": "Sıkıştırmayı devre dışı bırak"
+        },
+        {
+            "id": "Upload Speed Throttle",
+            "message": "Upload Speed Throttle",
+            "translation": "Yükleme hızını kısma "
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "Hata ayıklama"
+        },
+		{
+			"id": "About",
+			"message": "About",
+			"translation": "Hakkında"
+		},
+		{
+			"id": "License Info",
+			"message": "License Info",
+			"translation": "Lisans"
+		}
+    ]
+}

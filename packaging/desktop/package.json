@@ -1,0 +1,45 @@
+{
+  "name": "crocflow-desktop",
+  "version": "1.0.0",
+  "description": "CrocFlow Desktop — Trình truyền tệp mã hóa E2E đa nền tảng kèm Embedded Bridge & Dual-Relay Lab",
+  "main": "main.mjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ws": "^8.18.2",
+    "tsx": "^4.19.3"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.crocflow.desktop",
+    "productName": "CrocFlow",
+    "directories": {
+      "output": "../../release/desktop"
+    },
+    "files": [
+      "main.mjs",
+      "preload.mjs",
+      "dist/**/*",
+      "server.ts",
+      "server/**/*"
+    ],
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  }
+}

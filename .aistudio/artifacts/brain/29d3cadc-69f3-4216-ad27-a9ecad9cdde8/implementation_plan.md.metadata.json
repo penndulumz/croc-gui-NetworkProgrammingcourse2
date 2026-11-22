@@ -1,0 +1,6 @@
+{
+  "summary":  "Kế hoạch tổng thể xây dựng CrocFlow — ứng dụng truyền file mã hóa đa nền tảng (Android APK, Desktop, PWA) tương thích hoàn toàn hệ sinh thái Croc (CLI & getcroc.com), bổ sung gửi thư mục + Resume theo Manifest SHA-256, quản lý Relay + chế độ 2 Relay, Protocol Inspector trực tiếp, Lịch sử & Passphrase nhóm cố định, kèm quy trình Wayfinder và bộ tài liệu học thuật cho người mới bắt đầu.",
+  "updatedAt":  "2026-11-22T05:57:41.094522119Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

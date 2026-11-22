@@ -1,0 +1,107 @@
+name: Build CrocFlow Releases (Android APK & Desktop)
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  test-and-web:
+    name: Verify Tests & Build Web PWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run lint
+      - run: |
+          npx tsx --test \
+            server/bridge-allowlist.test.ts \
+            server/server.test.ts \
+            server/local-dual-relay.test.ts \
+            src/lib/theme.test.ts \
+            src/lib/group-passphrase.test.ts \
+            src/protocol/croc/codephrase.test.ts \
+            src/protocol/enhanced/manifest.test.ts \
+            src/protocol/enhanced/dual-relay-scheduler.test.ts \
+            src/protocol/enhanced/enhanced-transfer.test.ts
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crocflow-web-pwa-dist
+          path: dist/
+
+  build-android-apk:
+    name: Build Android APK (Capacitor)
+    needs: test-and-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: crocflow-web-pwa-dist
+          path: dist/
+      - name: Initialize Capacitor Android & Build Debug APK
+        run: |
+          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+          npx cap add android
+          npx cap sync android
+          cd android && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrocFlow-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-desktop:
+    name: Build Desktop (${{ matrix.os }})
+    needs: test-and-web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            artifact: CrocFlow-Windows-Installer
+          - os: macos-latest
+            script: dist:mac
+            artifact: CrocFlow-macOS-DMG
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: CrocFlow-Linux-AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: crocflow-web-pwa-dist
+          path: packaging/desktop/dist
+      - name: Stage Embedded Bridge Server
+        shell: bash
+        run: |
+          cp server.ts packaging/desktop/server.ts
+          cp -r server packaging/desktop/server
+      - name: Install & Package Electron App
+        working-directory: packaging/desktop
+        run: |
+          npm install
+          npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/desktop/*

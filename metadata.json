@@ -1,0 +1,5 @@
+{
+  "name": "CrocFlow",
+  "description": "Cross-platform end-to-end encrypted file transfer app for Android, Desktop, and PWA — interoperable with croc CLI and getcroc.com, extended with Folder SHA-256 Manifest Resume, Dual-Relay Failover, and Live Protocol Inspector.",
+  "requestFramePermissions": []
+}
