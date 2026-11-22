@@ -249,9 +249,9 @@ export function RelaysView({
 
         <button
           type="button"
-          onClick={() => onChangeRelayProfile("local-dual")}
+          onClick={() => onChangeRelayProfile("local-lab")}
           className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
-            relayProfile === "local-dual"
+            relayProfile === "local-dual" || relayProfile === "local-lab"
               ? "border-teal-600 bg-teal-50/70 dark:border-teal-400 dark:bg-teal-950/30"
               : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
           }`}

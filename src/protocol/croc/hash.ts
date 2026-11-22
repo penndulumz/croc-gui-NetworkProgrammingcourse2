@@ -4,7 +4,7 @@ import { hashSHA256Blob } from "./sha256";
 export type FileHashAlgorithm = "xxhash" | "sha256";
 export type FileHashProvider = (file: File) => Promise<Uint8Array>;
 
-type HashTask = {
+type HashOperation = {
   controller: AbortController;
   promise: Promise<Uint8Array>;
 };
@@ -66,16 +66,16 @@ export function waitForHash(hash: Promise<Uint8Array>, signal?: AbortSignal) {
 }
 
 export class FileHashCache {
-  private tasks = new Map<File, Map<FileHashAlgorithm, HashTask>>();
+  private operations = new Map<File, Map<FileHashAlgorithm, HashOperation>>();
   private tails = new Map<FileHashAlgorithm, Promise<void>>();
 
   constructor(private hashFile: HashFile = hashFileContents) {}
 
   hash(file: File, algorithm: FileHashAlgorithm) {
-    let algorithms = this.tasks.get(file);
+    let algorithms = this.operations.get(file);
     if (!algorithms) {
       algorithms = new Map();
-      this.tasks.set(file, algorithms);
+      this.operations.set(file, algorithms);
     }
     const existing = algorithms.get(algorithm);
     if (existing) return existing.promise;
@@ -93,13 +93,13 @@ export class FileHashCache {
         () => undefined,
       ),
     );
-    const hashTask: HashTask = { controller, promise };
-    algorithms.set(algorithm, hashTask);
+    const hashOp: HashOperation = { controller, promise };
+    algorithms.set(algorithm, hashOp);
     void promise.catch(() => {
-      const current = this.tasks.get(file);
-      if (current?.get(algorithm) !== hashTask) return;
+      const current = this.operations.get(file);
+      if (current?.get(algorithm) !== hashOp) return;
       current.delete(algorithm);
-      if (current.size === 0) this.tasks.delete(file);
+      if (current.size === 0) this.operations.delete(file);
     });
     return promise;
   }
@@ -110,10 +110,10 @@ export class FileHashCache {
 
   retain(files: File[]) {
     const retained = new Set(files);
-    for (const [file, algorithms] of this.tasks) {
+    for (const [file, algorithms] of this.operations) {
       if (retained.has(file)) continue;
-      for (const hashTask of algorithms.values()) hashTask.controller.abort();
-      this.tasks.delete(file);
+      for (const hashOp of algorithms.values()) hashOp.controller.abort();
+      this.operations.delete(file);
     }
   }
 

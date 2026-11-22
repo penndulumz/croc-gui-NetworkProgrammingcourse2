@@ -6,8 +6,10 @@ import {
   crc32,
   downloadZipArchive,
   saveEntriesToDirectory,
+  serializeZipArchive,
   toDosDate,
   toDosTime,
+  type PreparedZipEntry,
   type ZipEntry,
 } from "./zip";
 
@@ -231,4 +233,34 @@ test("downloadZipArchive executes safely in non-browser environment without erro
       },
     ]);
   });
+});
+
+test("serializeZipArchive constructs valid ZIP archive from prepared entries", () => {
+  const enc = new TextEncoder();
+  const name = enc.encode("doc.txt");
+  const data = enc.encode("Zip serialization helper test");
+  const prepared: PreparedZipEntry[] = [
+    {
+      safePath: "doc.txt",
+      encodedName: name,
+      data,
+      crc: crc32(data),
+      dosTime: 0,
+      dosDate: 0,
+      compressionMethod: 0,
+      compressedSize: data.byteLength,
+      uncompressedSize: data.byteLength,
+      localHeaderOffset: 0,
+    },
+  ];
+  const cdOffset = 30 + name.length + data.byteLength;
+  const cdSize = 46 + name.length;
+  const totalSize = cdOffset + cdSize + 22;
+
+  const archive = serializeZipArchive(prepared, totalSize, cdSize, cdOffset);
+  assert.equal(archive.byteLength, totalSize);
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  assert.equal(view.getUint32(0, true), 0x04034b50); // Local file header
+  assert.equal(view.getUint32(cdOffset, true), 0x02014b50); // Central directory header
+  assert.equal(view.getUint32(totalSize - 22, true), 0x06054b50); // EOCD header
 });

@@ -3,7 +3,6 @@
 
 interface CrocRuntimeConfig {
   bridgeURL?: string;
-  gatewayURL?: string;
   localDualRelayURL?: string;
   relayAddresses?: string[];
   relayPassword?: string;

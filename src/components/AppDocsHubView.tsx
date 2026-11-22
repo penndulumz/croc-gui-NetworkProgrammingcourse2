@@ -32,7 +32,7 @@ import {
   type EnhancedProgress,
   type EnhancedSendResult,
 } from "../protocol/enhanced/enhanced-client";
-import { RollingMetricsTracker, formatEta, formatSpeed } from "../lib/metrics";
+import { RollingMetricsTracker, formatEta, formatSpeed, useRollingMetrics } from "../lib/metrics";
 
 export interface AppDocsHubViewProps {
   history: TransferHistoryEntry[];
@@ -53,16 +53,6 @@ export function AppDocsHubView({ history, deviceAlias, onHistoryUpdated }: AppDo
   const [successText, setSuccessText] = useState<string | null>(null);
   const [progress, setProgress] = useState<EnhancedProgress | null>(null);
   const [alphaSevered, setAlphaSevered] = useState(false);
-  const [metrics, setMetrics] = useState<{
-    speedBps: number;
-    etaSeconds: number | null;
-    isStalled: boolean;
-  }>({
-    speedBps: 0,
-    etaSeconds: null,
-    isStalled: false,
-  });
-
   const [demo1Result, setDemo1Result] = useState<EnhancedSendResult | null>(null);
   const [demo2Result, setDemo2Result] = useState<{
     stage1CachedChunks: number;
@@ -72,16 +62,7 @@ export function AppDocsHubView({ history, deviceAlias, onHistoryUpdated }: AppDo
 
   const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
   const enhancedHandleRef = useRef<EnhancedControlHandle | null>(null);
-
-  useEffect(() => {
-    if (!runningDemo) return;
-    const interval = setInterval(() => {
-      if (metricsTrackerRef.current) {
-        setMetrics(metricsTrackerRef.current.getSnapshot());
-      }
-    }, 500);
-    return () => clearInterval(interval);
-  }, [runningDemo]);
+  const [metrics, setMetrics] = useRollingMetrics(metricsTrackerRef, Boolean(runningDemo));
 
   const copyCommand = async (id: string, cmd: string) => {
     try {

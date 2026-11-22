@@ -1,6 +1,10 @@
 import { deriveBridgeURL } from "./bridge-client";
 
-export type RelayProfileMode = "public" | "local-dual";
+export type RelayProfileMode = "public" | "local-lab" | "local-dual";
+
+export function isLocalLabProfile(profile?: RelayProfileMode | null): boolean {
+  return profile === "local-lab" || profile === "local-dual";
+}
 
 export interface RelayNodeEntry {
   id: string;
@@ -144,7 +148,7 @@ export function loadRelayProfile(storage?: StorageLike | null): RelayProfileMode
           ? localStorage
           : null;
     const saved = targetStorage?.getItem(RELAY_PROFILE_KEY);
-    if (saved === "public" || saved === "local-dual") return saved;
+    if (saved === "public" || saved === "local-lab" || saved === "local-dual") return saved;
   } catch {
     // Ignore storage read errors
   }
@@ -173,7 +177,7 @@ export function getRelayProfileEndpoints(
   protocol = typeof window !== "undefined" ? window.location.protocol : "http:",
   host = typeof window !== "undefined" ? window.location.host : "localhost:3000",
 ): RelayProfileEndpoints {
-  const isLocalLab = profile === "local-dual";
+  const isLocalLab = profile === "local-lab" || profile === "local-dual";
   return {
     profile,
     standardBridgeURL: deriveBridgeURL(protocol, host, "/ws"),

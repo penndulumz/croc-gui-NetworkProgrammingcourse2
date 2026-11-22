@@ -31,6 +31,7 @@ import {
   savePeerPreset,
   touchPeerPreset,
   type PeerPreset,
+  type RelayProfileMode,
   type TransferHistoryEntry,
 } from "../lib/history-store";
 import { formatBytes, formatDateTimeVi } from "../lib/format";
@@ -68,7 +69,7 @@ export function HistoryGroupView({
   const [peers, setPeers] = useState<PeerPreset[]>(() => loadPeerPresets());
   const [peerSearchQuery, setPeerSearchQuery] = useState("");
   const [peerAliasInput, setPeerAliasInput] = useState("");
-  const [peerProfileInput, setPeerProfileInput] = useState<"default" | "public" | "local-dual">("default");
+  const [peerProfileInput, setPeerProfileInput] = useState<"default" | RelayProfileMode>("default");
   const [peerNotesInput, setPeerNotesInput] = useState("");
   const [editingPeerId, setEditingPeerId] = useState<string | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
@@ -447,14 +448,14 @@ export function HistoryGroupView({
               <select
                 value={peerProfileInput}
                 onChange={(e) =>
-                  setPeerProfileInput(e.target.value as "default" | "public" | "local-dual")
+                  setPeerProfileInput(e.target.value as "default" | RelayProfileMode)
                 }
                 aria-label="Hồ sơ Relay ưu tiên"
                 className="min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 focus:border-teal-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               >
                 <option value="default">Hồ sơ: Mặc định</option>
                 <option value="public">🌐 Public Croc Relays</option>
-                <option value="local-dual">⚡ Local Dual-Relay Lab</option>
+                <option value="local-lab">⚡ Local Dual-Relay Lab</option>
               </select>
             </div>
 
@@ -526,12 +527,14 @@ export function HistoryGroupView({
                     {p.preferredRelayProfile && (
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          p.preferredRelayProfile === "local-dual"
+                          p.preferredRelayProfile === "local-dual" ||
+                          p.preferredRelayProfile === "local-lab"
                             ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
                             : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                         }`}
                       >
-                        {p.preferredRelayProfile === "local-dual" ? (
+                        {p.preferredRelayProfile === "local-dual" ||
+                        p.preferredRelayProfile === "local-lab" ? (
                           <>
                             <Zap className="h-2.5 w-2.5" aria-hidden="true" />
                             Local Dual-Relay Lab

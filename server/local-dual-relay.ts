@@ -160,6 +160,3 @@ export class LocalDualRelayNode {
     };
   }
 }
-
-// Deprecated alias for backwards compatibility
-export { LocalDualRelayNode as LocalDualRelayHub };

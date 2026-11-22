@@ -1,3 +1,5 @@
+import { useEffect, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
+
 export interface FileProgress {
   name: string;
   size: number;
@@ -246,4 +248,42 @@ export function calculateManifestFileProgress(
       done: file.size > 0 ? transferred >= file.size : true,
     };
   });
+}
+
+export type UseRollingMetricsResult = [
+  MetricsSnapshot,
+  Dispatch<SetStateAction<MetricsSnapshot>>,
+] & {
+  metrics: MetricsSnapshot;
+  setMetrics: Dispatch<SetStateAction<MetricsSnapshot>>;
+};
+
+/**
+ * React hook to poll and update rolling metrics snapshot over an interval while active.
+ */
+export function useRollingMetrics(
+  trackerRef: RefObject<RollingMetricsTracker | null>,
+  isActive: boolean,
+  intervalMs = 500,
+): UseRollingMetricsResult {
+  const [metrics, setMetrics] = useState<MetricsSnapshot>({
+    speedBps: 0,
+    etaSeconds: null,
+    isStalled: false,
+  });
+
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(() => {
+      if (trackerRef.current) {
+        setMetrics(trackerRef.current.getSnapshot());
+      }
+    }, intervalMs);
+    return () => clearInterval(interval);
+  }, [isActive, intervalMs, trackerRef]);
+
+  const tuple = [metrics, setMetrics] as unknown as UseRollingMetricsResult;
+  tuple.metrics = metrics;
+  tuple.setMetrics = setMetrics;
+  return tuple;
 }

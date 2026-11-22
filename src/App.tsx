@@ -155,7 +155,6 @@ export const App: React.FC = () => {
       onToggleTheme={handleToggleTheme}
       bridgeHealthy={bridgeHealthy}
       relayProfile={relayProfile}
-      onChangeRelayProfile={handleChangeRelayProfile}
       deviceAlias={deviceAlias}
       topBarAction={<PWAInstallButton compact />}
     >

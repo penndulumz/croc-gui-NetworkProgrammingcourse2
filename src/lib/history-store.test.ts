@@ -103,6 +103,21 @@ test("savePeerPreset creates a new preset with auto-generated id and persists to
   assert.equal(reloaded[0].alias, "Workstation RTX");
 });
 
+test("savePeerPreset supports 'local-lab' as canonical relay profile", () => {
+  const storage = createMockStorage();
+  const saved = savePeerPreset(
+    {
+      alias: "Campus Cluster",
+      preferredRelayProfile: "local-lab",
+      notes: "Local LAN node",
+    },
+    storage,
+  );
+  assert.equal(saved.preferredRelayProfile, "local-lab");
+  const loaded = loadPeerPresets(storage);
+  assert.equal(loaded[0].preferredRelayProfile, "local-lab");
+});
+
 test("savePeerPreset trims and truncates alias to 48 characters", () => {
   const storage = createMockStorage();
   const longName = "A".repeat(60);

@@ -37,6 +37,7 @@ import {
 import { formatBytes } from "../lib/format";
 import {
   RollingMetricsTracker,
+  useRollingMetrics,
   formatEta,
   formatSpeed,
   calculateFileProgress,
@@ -99,16 +100,8 @@ export function SendView({
 
   const [stdProgress, setStdProgress] = useState<CrocFileProgress | null>(null);
   const [enhProgress, setEnhProgress] = useState<EnhancedProgress | null>(null);
-  const [metrics, setMetrics] = useState<{
-    speedBps: number;
-    etaSeconds: number | null;
-    isStalled: boolean;
-  }>({
-    speedBps: 0,
-    etaSeconds: null,
-    isStalled: false,
-  });
   const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
+  const [metrics, setMetrics] = useRollingMetrics(metricsTrackerRef, busy);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -191,16 +184,6 @@ export function SendView({
       }
     }
   };
-
-  useEffect(() => {
-    if (!busy) return;
-    const interval = setInterval(() => {
-      if (metricsTrackerRef.current) {
-        setMetrics(metricsTrackerRef.current.getSnapshot());
-      }
-    }, 500);
-    return () => clearInterval(interval);
-  }, [busy]);
 
   const regenerateCode = () => {
     void autoGenerateCode();
@@ -480,6 +463,8 @@ export function SendView({
     return [];
   }, [mode, selectedFiles, stdProgress, enhProgress]);
 
+  const isLocalProfile = relayProfile === "local-dual" || relayProfile === "local-lab";
+
   return (
     <div className="space-y-5">
       {/* Page Title */}
@@ -572,18 +557,18 @@ export function SendView({
             <span className="font-medium text-slate-500 dark:text-slate-400">Hồ sơ Relay:</span>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold ${
-                relayProfile === "local-dual"
+                isLocalProfile
                   ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
                   : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300/40"
               }`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  relayProfile === "local-dual" ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                  isLocalProfile ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
                 }`}
                 aria-hidden="true"
               />
-              {relayProfile === "local-dual"
+              {isLocalProfile
                 ? "Local Dual-Relay Lab (Offline/LAN)"
                 : "Public Croc Relays"}
             </span>
@@ -593,17 +578,17 @@ export function SendView({
               type="button"
               disabled={busy}
               onClick={() =>
-                onChangeRelayProfile(relayProfile === "local-dual" ? "public" : "local-dual")
+                onChangeRelayProfile(isLocalProfile ? "public" : "local-lab")
               }
               className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium underline-offset-2 hover:underline disabled:opacity-50"
             >
-              Đổi sang {relayProfile === "local-dual" ? "Public Croc Relays" : "Local Lab"}
+              Đổi sang {isLocalProfile ? "Public Croc Relays" : "Local Lab"}
             </button>
           )}
         </div>
 
         {/* Guidance when Local Dual-Relay Lab is active in Standard Mode */}
-        {mode === "standard" && relayProfile === "local-dual" && (
+        {mode === "standard" && isLocalProfile && (
           <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/80 p-3.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-200">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
@@ -866,12 +851,17 @@ export function SendView({
               aria-label="Chọn thiết bị nhận thường gặp"
             >
               <option value="">-- Chọn thiết bị thường gặp --</option>
-              {peerPresets.map((peer) => (
-                <option key={peer.id} value={peer.id}>
-                  {peer.alias} {peer.preferredRelayProfile === "local-dual" ? "(⚡ Local Lab)" : ""}
-                  {peer.notes ? ` · ${peer.notes}` : ""}
-                </option>
-              ))}
+              {peerPresets.map((peer) => {
+                const isPeerLocal =
+                  peer.preferredRelayProfile === "local-dual" ||
+                  peer.preferredRelayProfile === "local-lab";
+                return (
+                  <option key={peer.id} value={peer.id}>
+                    {peer.alias} {isPeerLocal ? "(⚡ Local Lab)" : ""}
+                    {peer.notes ? ` · ${peer.notes}` : ""}
+                  </option>
+                );
+              })}
             </select>
 
             {/* Quick Chips for Top Frequent Peers */}
@@ -890,7 +880,8 @@ export function SendView({
                 >
                   <Smartphone className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" aria-hidden="true" />
                   <span>{peer.alias}</span>
-                  {peer.preferredRelayProfile === "local-dual" && (
+                  {(peer.preferredRelayProfile === "local-dual" ||
+                    peer.preferredRelayProfile === "local-lab") && (
                     <span className="rounded bg-teal-200/60 px-1 text-[10px] font-semibold text-teal-900 dark:bg-teal-900 dark:text-teal-200">
                       ⚡ Lab
                     </span>
@@ -919,7 +910,8 @@ export function SendView({
                 <span className="text-[11px] text-teal-700 dark:text-teal-300">
                   Hồ sơ relay ưu tiên:{" "}
                   <strong>
-                    {activePeer.preferredRelayProfile === "local-dual"
+                    {activePeer.preferredRelayProfile === "local-dual" ||
+                    activePeer.preferredRelayProfile === "local-lab"
                       ? "Local Dual-Relay Lab"
                       : "Public Croc Relays"}
                   </strong>
@@ -1062,7 +1054,7 @@ export function SendView({
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="truncate font-medium">{statusText}</span>
                   <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">
-                    ({relayProfile === "local-dual" ? "Local Lab" : "Public"})
+                    ({isLocalProfile ? "Local Lab" : "Public"})
                   </span>
                 </div>
                 {progressPercent > 0 && (

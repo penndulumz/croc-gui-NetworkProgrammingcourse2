@@ -285,17 +285,35 @@ function defaultWebSocketFactory(url: string): WebSocketLike {
   return new WebSocket(url) as unknown as WebSocketLike;
 }
 
+function resolveTargetWsBaseUrl(baseWsUrl: string, targetRelayNode?: string): string {
+  if (!targetRelayNode) return baseWsUrl;
+  if (targetRelayNode.startsWith("ws://") || targetRelayNode.startsWith("wss://")) {
+    return targetRelayNode;
+  }
+  return baseWsUrl;
+}
+
 async function openRelayChannel(params: {
   baseWsUrl: string;
   lane: RelayLane;
   room: string;
   role: "sender" | "receiver";
+  targetRelayNode?: string;
   wsFactory: WebSocketFactory;
   onMessage: (lane: RelayLane, msg: WirePlainMessage) => void;
   onClose: (lane: RelayLane) => void;
   signal?: AbortSignal;
 }): Promise<RelayChannelConnection> {
-  const url = `${params.baseWsUrl}?channel=${params.lane}&room=${encodeURIComponent(params.room)}&role=${params.role}`;
+  const base = resolveTargetWsBaseUrl(params.baseWsUrl, params.targetRelayNode);
+  const separator = base.includes("?") ? "&" : "?";
+  let url = `${base}${separator}channel=${params.lane}&room=${encodeURIComponent(params.room)}&role=${params.role}`;
+  if (
+    params.targetRelayNode &&
+    !params.targetRelayNode.startsWith("ws://") &&
+    !params.targetRelayNode.startsWith("wss://")
+  ) {
+    url += `&node=${encodeURIComponent(params.targetRelayNode)}`;
+  }
   const ws = params.wsFactory(url);
   ws.binaryType = "arraybuffer";
 
@@ -497,6 +515,7 @@ export async function sendEnhancedTransfer(options: {
       lane: "alpha",
       room,
       role: "sender",
+      targetRelayNode,
       wsFactory,
       onMessage: handleMessage,
       onClose: handleClose,
@@ -509,6 +528,7 @@ export async function sendEnhancedTransfer(options: {
         lane: "beta",
         room,
         role: "sender",
+        targetRelayNode,
         wsFactory,
         onMessage: handleMessage,
         onClose: handleClose,
@@ -897,9 +917,10 @@ export async function sendEnhancedTransfer(options: {
   }
 }
 
-export async function receiveEnhancedTransfer(options: {
+export interface EnhancedReceiveParams {
   codephrase: string;
   dualRelay?: boolean;
+  targetRelayNode?: string;
   baseWsUrl?: string;
   wsFactory?: WebSocketFactory;
   cache?: ChunkCacheAdapter;
@@ -909,10 +930,13 @@ export async function receiveEnhancedTransfer(options: {
   onStatus?: (status: string) => void;
   onManifestOffer?: (manifest: FolderManifest, resumePlan: ResumePlan) => Promise<boolean>;
   onProgress?: (progress: EnhancedProgress) => void;
-}): Promise<EnhancedReceiveResult> {
+}
+
+export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): Promise<EnhancedReceiveResult> {
   const {
     codephrase,
     dualRelay = true,
+    targetRelayNode,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
     cache = browserIndexedDbCache,
@@ -942,9 +966,11 @@ export async function receiveEnhancedTransfer(options: {
 
   try {
     onStatus?.(
-      dualRelay
-        ? "Đang kết nối máy nhận tới Relay Alpha & Relay Beta…"
-        : "Đang kết nối máy nhận tới Relay Alpha…",
+      targetRelayNode
+        ? `Đang kết nối máy nhận qua Relay Node (${targetRelayNode})…`
+        : dualRelay
+          ? "Đang kết nối máy nhận tới Relay Alpha & Relay Beta…"
+          : "Đang kết nối máy nhận tới Relay Alpha…",
     );
 
     const handleMsg = (lane: RelayLane, msg: WirePlainMessage) => {
@@ -961,6 +987,7 @@ export async function receiveEnhancedTransfer(options: {
       lane: "alpha",
       room,
       role: "receiver",
+      targetRelayNode,
       wsFactory,
       onMessage: handleMsg,
       onClose: handleClose,
@@ -972,6 +999,7 @@ export async function receiveEnhancedTransfer(options: {
         lane: "beta",
         room,
         role: "receiver",
+        targetRelayNode,
         wsFactory,
         onMessage: handleMsg,
         onClose: handleClose,
@@ -981,6 +1009,17 @@ export async function receiveEnhancedTransfer(options: {
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("room", "done");
+      protocolEventBus.logEvent({
+        kind: "relay",
+        mode: "enhanced",
+        relay: "alpha",
+        title: targetRelayNode
+          ? `Đã kết nối qua Relay Node (${targetRelayNode})`
+          : dualRelay
+            ? "Đã kết nối song song Relay Alpha & Beta"
+            : "Đã kết nối Relay Alpha",
+        detail: `Room ${room}`,
+      });
       protocolEventBus.setPakeStep("pake", "active");
     }
 

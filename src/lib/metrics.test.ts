@@ -6,6 +6,7 @@ import {
   formatEta,
   calculateFileProgress,
   calculateManifestFileProgress,
+  useRollingMetrics,
 } from "./metrics.ts";
 
 test("formatSpeed formats bytes per second into clean human units", () => {
@@ -193,4 +194,8 @@ test("calculateManifestFileProgress derives accurate progress from delivered chu
   assert.equal(progress[1].name, "docs/spec.pdf");
   assert.equal(progress[1].transferred, 500);
   assert.equal(progress[1].done, false);
+});
+
+test("useRollingMetrics is exported and defined as a hook function", () => {
+  assert.equal(typeof useRollingMetrics, "function");
 });

@@ -46,7 +46,7 @@ export function toDosDate(date: Date): number {
   return ((year << 9) | (month << 5) | day) & 0xffff;
 }
 
-interface PreparedZipFile {
+export interface PreparedZipEntry {
   safePath: string;
   encodedName: Uint8Array;
   data: Uint8Array;
@@ -60,13 +60,86 @@ interface PreparedZipFile {
 }
 
 /**
+ * Shared binary layout serializer for ZIP archives (PKZip 2.0 format).
+ * Writes Local File Headers, file payloads, Central Directory Headers, and EOCD record.
+ */
+export function serializeZipArchive(
+  prepared: PreparedZipEntry[],
+  totalSize: number,
+  cdSize: number,
+  cdOffset: number,
+): Uint8Array {
+  const archive = new Uint8Array(totalSize);
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+
+  // 1. Write Local File Headers + File Data
+  for (const file of prepared) {
+    const offset = file.localHeaderOffset;
+    view.setUint32(offset + 0, 0x04034b50, true); // Local file header signature
+    view.setUint16(offset + 4, 20, true);         // Version needed to extract (2.0)
+    view.setUint16(offset + 6, 0x0800, true);     // General purpose bit flag (UTF-8 enabled)
+    view.setUint16(offset + 8, file.compressionMethod, true); // Compression method
+    view.setUint16(offset + 10, file.dosTime, true);
+    view.setUint16(offset + 12, file.dosDate, true);
+    view.setUint32(offset + 14, file.crc, true);
+    view.setUint32(offset + 18, file.compressedSize, true);
+    view.setUint32(offset + 22, file.uncompressedSize, true);
+    view.setUint16(offset + 26, file.encodedName.length, true);
+    view.setUint16(offset + 28, 0, true);         // Extra field length
+
+    // File name
+    archive.set(file.encodedName, offset + 30);
+    // File data
+    archive.set(file.data, offset + 30 + file.encodedName.length);
+  }
+
+  // 2. Write Central Directory Headers
+  let currentCdOffset = cdOffset;
+  for (const file of prepared) {
+    view.setUint32(currentCdOffset + 0, 0x02014b50, true); // Central directory header signature
+    view.setUint16(currentCdOffset + 4, 0x0014, true);     // Version made by (DOS 2.0)
+    view.setUint16(currentCdOffset + 6, 20, true);         // Version needed to extract (2.0)
+    view.setUint16(currentCdOffset + 8, 0x0800, true);     // General purpose bit flag (UTF-8 enabled)
+    view.setUint16(currentCdOffset + 10, file.compressionMethod, true); // Compression method
+    view.setUint16(currentCdOffset + 12, file.dosTime, true);
+    view.setUint16(currentCdOffset + 14, file.dosDate, true);
+    view.setUint32(currentCdOffset + 16, file.crc, true);
+    view.setUint32(currentCdOffset + 20, file.compressedSize, true);
+    view.setUint32(currentCdOffset + 24, file.uncompressedSize, true);
+    view.setUint16(currentCdOffset + 28, file.encodedName.length, true);
+    view.setUint16(currentCdOffset + 30, 0, true);         // Extra field length
+    view.setUint16(currentCdOffset + 32, 0, true);         // File comment length
+    view.setUint16(currentCdOffset + 34, 0, true);         // Disk number start
+    view.setUint16(currentCdOffset + 36, 0, true);         // Internal file attributes
+    view.setUint32(currentCdOffset + 38, 0x81a40000, true);// External file attributes (regular Unix file -rw-r--r--)
+    view.setUint32(currentCdOffset + 42, file.localHeaderOffset, true); // Relative offset of local header
+
+    // File name
+    archive.set(file.encodedName, currentCdOffset + 46);
+    currentCdOffset += 46 + file.encodedName.length;
+  }
+
+  // 3. Write End of Central Directory Record (EOCD)
+  view.setUint32(currentCdOffset + 0, 0x06054b50, true); // End of central dir signature
+  view.setUint16(currentCdOffset + 4, 0, true);          // Number of this disk
+  view.setUint16(currentCdOffset + 6, 0, true);          // Disk where central directory starts
+  view.setUint16(currentCdOffset + 8, prepared.length, true); // Records on this disk
+  view.setUint16(currentCdOffset + 10, prepared.length, true); // Total records
+  view.setUint32(currentCdOffset + 12, cdSize, true); // Size of central directory
+  view.setUint32(currentCdOffset + 16, cdOffset, true); // Offset of start of central directory
+  view.setUint16(currentCdOffset + 20, 0, true);         // Comment length
+
+  return archive;
+}
+
+/**
  * Creates a standard ZIP archive (PKZip 2.0 format) in memory.
  * By default, uses method 0 (Store) for maximum speed and zero dependencies.
  * Validates and sanitizes paths using sanitizeRelativePath.
  */
 export function createZipArchive(entries: ZipEntry[]): Uint8Array {
   const encoder = new TextEncoder();
-  const prepared: PreparedZipFile[] = [];
+  const prepared: PreparedZipEntry[] = [];
   const seenPaths = new Set<string>();
 
   let currentOffset = 0;
@@ -112,67 +185,7 @@ export function createZipArchive(entries: ZipEntry[]): Uint8Array {
 
   // End of Central Directory Record (22 bytes)
   const totalArchiveSize = centralDirectoryOffset + centralDirectorySize + 22;
-  const archive = new Uint8Array(totalArchiveSize);
-  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-
-  // 1. Write Local File Headers + File Data
-  for (const file of prepared) {
-    const offset = file.localHeaderOffset;
-    view.setUint32(offset + 0, 0x04034b50, true); // Local file header signature
-    view.setUint16(offset + 4, 20, true);         // Version needed to extract (2.0)
-    view.setUint16(offset + 6, 0x0800, true);     // General purpose bit flag (UTF-8 enabled)
-    view.setUint16(offset + 8, file.compressionMethod, true); // Compression method
-    view.setUint16(offset + 10, file.dosTime, true);
-    view.setUint16(offset + 12, file.dosDate, true);
-    view.setUint32(offset + 14, file.crc, true);
-    view.setUint32(offset + 18, file.compressedSize, true);
-    view.setUint32(offset + 22, file.uncompressedSize, true);
-    view.setUint16(offset + 26, file.encodedName.length, true);
-    view.setUint16(offset + 28, 0, true);         // Extra field length
-
-    // File name
-    archive.set(file.encodedName, offset + 30);
-    // File data
-    archive.set(file.data, offset + 30 + file.encodedName.length);
-  }
-
-  // 2. Write Central Directory Headers
-  let cdOffset = centralDirectoryOffset;
-  for (const file of prepared) {
-    view.setUint32(cdOffset + 0, 0x02014b50, true); // Central directory header signature
-    view.setUint16(cdOffset + 4, 0x0014, true);     // Version made by (DOS 2.0)
-    view.setUint16(cdOffset + 6, 20, true);         // Version needed to extract (2.0)
-    view.setUint16(cdOffset + 8, 0x0800, true);     // General purpose bit flag (UTF-8 enabled)
-    view.setUint16(cdOffset + 10, file.compressionMethod, true); // Compression method
-    view.setUint16(cdOffset + 12, file.dosTime, true);
-    view.setUint16(cdOffset + 14, file.dosDate, true);
-    view.setUint32(cdOffset + 16, file.crc, true);
-    view.setUint32(cdOffset + 20, file.compressedSize, true);
-    view.setUint32(cdOffset + 24, file.uncompressedSize, true);
-    view.setUint16(cdOffset + 28, file.encodedName.length, true);
-    view.setUint16(cdOffset + 30, 0, true);         // Extra field length
-    view.setUint16(cdOffset + 32, 0, true);         // File comment length
-    view.setUint16(cdOffset + 34, 0, true);         // Disk number start
-    view.setUint16(cdOffset + 36, 0, true);         // Internal file attributes
-    view.setUint32(cdOffset + 38, 0x81a40000, true);// External file attributes (regular Unix file -rw-r--r--)
-    view.setUint32(cdOffset + 42, file.localHeaderOffset, true); // Relative offset of local header
-
-    // File name
-    archive.set(file.encodedName, cdOffset + 46);
-    cdOffset += 46 + file.encodedName.length;
-  }
-
-  // 3. Write End of Central Directory Record (EOCD)
-  view.setUint32(cdOffset + 0, 0x06054b50, true); // End of central dir signature
-  view.setUint16(cdOffset + 4, 0, true);          // Number of this disk
-  view.setUint16(cdOffset + 6, 0, true);          // Disk where central directory starts
-  view.setUint16(cdOffset + 8, prepared.length, true); // Records on this disk
-  view.setUint16(cdOffset + 10, prepared.length, true); // Total records
-  view.setUint32(cdOffset + 12, centralDirectorySize, true); // Size of central directory
-  view.setUint32(cdOffset + 16, centralDirectoryOffset, true); // Offset of start of central directory
-  view.setUint16(cdOffset + 20, 0, true);         // Comment length
-
-  return archive;
+  return serializeZipArchive(prepared, totalArchiveSize, centralDirectorySize, centralDirectoryOffset);
 }
 
 /**
@@ -218,7 +231,7 @@ export async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
  */
 export async function createZipArchiveAsync(entries: ZipEntry[]): Promise<Uint8Array> {
   const encoder = new TextEncoder();
-  const prepared: PreparedZipFile[] = [];
+  const prepared: PreparedZipEntry[] = [];
   const seenPaths = new Set<string>();
 
   let currentOffset = 0;
@@ -270,61 +283,7 @@ export async function createZipArchiveAsync(entries: ZipEntry[]): Promise<Uint8A
   }
 
   const totalArchiveSize = centralDirectoryOffset + centralDirectorySize + 22;
-  const archive = new Uint8Array(totalArchiveSize);
-  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-
-  for (const file of prepared) {
-    const offset = file.localHeaderOffset;
-    view.setUint32(offset + 0, 0x04034b50, true);
-    view.setUint16(offset + 4, 20, true);
-    view.setUint16(offset + 6, 0x0800, true);
-    view.setUint16(offset + 8, file.compressionMethod, true);
-    view.setUint16(offset + 10, file.dosTime, true);
-    view.setUint16(offset + 12, file.dosDate, true);
-    view.setUint32(offset + 14, file.crc, true);
-    view.setUint32(offset + 18, file.compressedSize, true);
-    view.setUint32(offset + 22, file.uncompressedSize, true);
-    view.setUint16(offset + 26, file.encodedName.length, true);
-    view.setUint16(offset + 28, 0, true);
-
-    archive.set(file.encodedName, offset + 30);
-    archive.set(file.data, offset + 30 + file.encodedName.length);
-  }
-
-  let cdOffset = centralDirectoryOffset;
-  for (const file of prepared) {
-    view.setUint32(cdOffset + 0, 0x02014b50, true);
-    view.setUint16(cdOffset + 4, 0x0014, true);
-    view.setUint16(cdOffset + 6, 20, true);
-    view.setUint16(cdOffset + 8, 0x0800, true);
-    view.setUint16(cdOffset + 10, file.compressionMethod, true);
-    view.setUint16(cdOffset + 12, file.dosTime, true);
-    view.setUint16(cdOffset + 14, file.dosDate, true);
-    view.setUint32(cdOffset + 16, file.crc, true);
-    view.setUint32(cdOffset + 20, file.compressedSize, true);
-    view.setUint32(cdOffset + 24, file.uncompressedSize, true);
-    view.setUint16(cdOffset + 28, file.encodedName.length, true);
-    view.setUint16(cdOffset + 30, 0, true);
-    view.setUint16(cdOffset + 32, 0, true);
-    view.setUint16(cdOffset + 34, 0, true);
-    view.setUint16(cdOffset + 36, 0, true);
-    view.setUint32(cdOffset + 38, 0x81a40000, true);
-    view.setUint32(cdOffset + 42, file.localHeaderOffset, true);
-
-    archive.set(file.encodedName, cdOffset + 46);
-    cdOffset += 46 + file.encodedName.length;
-  }
-
-  view.setUint32(cdOffset + 0, 0x06054b50, true);
-  view.setUint16(cdOffset + 4, 0, true);
-  view.setUint16(cdOffset + 6, 0, true);
-  view.setUint16(cdOffset + 8, prepared.length, true);
-  view.setUint16(cdOffset + 10, prepared.length, true);
-  view.setUint32(cdOffset + 12, centralDirectorySize, true);
-  view.setUint32(cdOffset + 16, centralDirectoryOffset, true);
-  view.setUint16(cdOffset + 20, 0, true);
-
-  return archive;
+  return serializeZipArchive(prepared, totalArchiveSize, centralDirectorySize, centralDirectoryOffset);
 }
 
 /**

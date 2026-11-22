@@ -3,10 +3,16 @@ import {
   AlertCircle,
   Archive,
   Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Database,
   Download,
+  FileText,
+  Folder,
   FolderDown,
+  FolderOpen,
   Inbox,
   Layers,
   RefreshCw,
@@ -34,13 +40,18 @@ import { appendTransferHistory } from "../lib/history-store";
 import { downloadBinaryFile, formatBytes } from "../lib/format";
 import {
   RollingMetricsTracker,
+  useRollingMetrics,
   formatEta,
   formatSpeed,
   calculateFileProgress,
   type FileProgress,
 } from "../lib/metrics";
 import { downloadZipArchive, saveEntriesToDirectory, type ZipEntry } from "../lib/zip";
-import type { RelayProfileMode } from "../lib/relay-manager";
+import {
+  findFastestRelay,
+  loadRelayLatencies,
+  type RelayProfileMode,
+} from "../lib/relay-manager";
 
 export interface ReceiveViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -66,6 +77,219 @@ interface PendingEnhancedOffer {
   resolve: (accepted: boolean) => void;
 }
 
+export interface FolderTreeProps {
+  files: ReceivedEnhancedFile[];
+  onDownloadFile?: (file: ReceivedEnhancedFile) => void;
+}
+
+interface DirectoryTreeNode {
+  name: string;
+  path: string;
+  files: ReceivedEnhancedFile[];
+  subfolders: Map<string, DirectoryTreeNode>;
+}
+
+function buildDirectoryTree(files: ReceivedEnhancedFile[]): DirectoryTreeNode {
+  const root: DirectoryTreeNode = {
+    name: "",
+    path: "",
+    files: [],
+    subfolders: new Map(),
+  };
+
+  for (const file of files) {
+    const rawPath = file.relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+    const parts = rawPath.split("/").filter(Boolean);
+    let current = root;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folderName = parts[i];
+      const folderPath = current.path ? `${current.path}/${folderName}` : folderName;
+      let next = current.subfolders.get(folderName);
+      if (!next) {
+        next = {
+          name: folderName,
+          path: folderPath,
+          files: [],
+          subfolders: new Map(),
+        };
+        current.subfolders.set(folderName, next);
+      }
+      current = next;
+    }
+    current.files.push(file);
+  }
+
+  return root;
+}
+
+function countTreeStats(node: DirectoryTreeNode): { totalCount: number; totalBytes: number } {
+  let totalCount = node.files.length;
+  let totalBytes = node.files.reduce((sum, f) => sum + f.size, 0);
+  for (const sub of node.subfolders.values()) {
+    const subStats = countTreeStats(sub);
+    totalCount += subStats.totalCount;
+    totalBytes += subStats.totalBytes;
+  }
+  return { totalCount, totalBytes };
+}
+
+interface FolderTreeNodeViewProps {
+  node: DirectoryTreeNode;
+  openFolders: Set<string>;
+  onToggleFolder: (path: string) => void;
+  onDownloadFile: (file: ReceivedEnhancedFile) => void;
+  level: number;
+}
+
+const FolderTreeNodeView: React.FC<FolderTreeNodeViewProps> = ({
+  node,
+  openFolders,
+  onToggleFolder,
+  onDownloadFile,
+  level,
+}) => {
+  const sortedSubfolders = Array.from(node.subfolders.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="space-y-1.5">
+      {/* Subfolders */}
+      {sortedSubfolders.map((sub) => {
+        const isOpen = openFolders.has(sub.path);
+        const { totalCount, totalBytes } = countTreeStats(sub);
+
+        return (
+          <div key={sub.path} className="rounded-lg border border-slate-200/70 dark:border-slate-800/70 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => onToggleFolder(sub.path)}
+              aria-expanded={isOpen}
+              className="flex w-full items-center justify-between gap-2 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-100 transition-colors dark:bg-slate-800/60 dark:text-slate-200 dark:hover:bg-slate-800"
+              style={{ paddingLeft: `${Math.max(12, level * 16 + 12)}px` }}
+            >
+              <div className="flex min-w-0 items-center gap-2 truncate">
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                )}
+                {isOpen ? (
+                  <FolderOpen className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                ) : (
+                  <Folder className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+                )}
+                <span className="truncate font-mono">{sub.name}/</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="rounded bg-slate-200/70 px-1.5 py-0.5 font-mono text-[10px] dark:bg-slate-700">
+                  {totalCount} tệp
+                </span>
+                <span className="font-mono tabular-nums">{formatBytes(totalBytes)}</span>
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="p-1.5 bg-slate-50/30 dark:bg-slate-950/20">
+                <FolderTreeNodeView
+                  node={sub}
+                  openFolders={openFolders}
+                  onToggleFolder={onToggleFolder}
+                  onDownloadFile={onDownloadFile}
+                  level={level + 1}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Files */}
+      {sortedFiles.map((file) => (
+        <div
+          key={file.relativePath}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 text-xs shadow-xs hover:border-slate-200 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-slate-700"
+          style={{ paddingLeft: `${Math.max(12, level * 16 + 12)}px` }}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <FileText className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+            <div className="min-w-0">
+              <div className="truncate font-mono font-medium text-slate-900 dark:text-slate-100">
+                {file.name}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="font-mono">{formatBytes(file.size)}</span>
+                <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  SHA-256 ✓ {file.sha256.slice(0, 10)}…
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onDownloadFile(file)}
+            className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+            Lưu tệp
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export const FolderTree: React.FC<FolderTreeProps> = ({
+  files,
+  onDownloadFile = (f) => downloadBinaryFile(f.name, f.bytes, f.mimeType),
+}) => {
+  const rootNode = useMemo(() => buildDirectoryTree(files), [files]);
+
+  const allFolderPaths = useMemo(() => {
+    const paths = new Set<string>();
+    const collect = (n: DirectoryTreeNode) => {
+      if (n.path) paths.add(n.path);
+      for (const sub of n.subfolders.values()) collect(sub);
+    };
+    collect(rootNode);
+    return paths;
+  }, [rootNode]);
+
+  const [openFolders, setOpenFolders] = useState<Set<string>>(() => new Set(allFolderPaths));
+
+  useEffect(() => {
+    setOpenFolders(new Set(allFolderPaths));
+  }, [allFolderPaths]);
+
+  const handleToggleFolder = (path: string) => {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-2 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-950/20">
+      <FolderTreeNodeView
+        node={rootNode}
+        openFolders={openFolders}
+        onToggleFolder={handleToggleFolder}
+        onDownloadFile={onDownloadFile}
+        level={0}
+      />
+    </div>
+  );
+};
+
 export function ReceiveView({
   bridgeConfig,
   deviceAlias,
@@ -88,16 +312,8 @@ export function ReceiveView({
   const [stdProgress, setStdProgress] = useState<CrocFileProgress | null>(null);
   const [enhProgress, setEnhProgress] = useState<EnhancedProgress | null>(null);
   const [offeredFiles, setOfferedFiles] = useState<OfferedFile[] | null>(null);
-  const [metrics, setMetrics] = useState<{
-    speedBps: number;
-    etaSeconds: number | null;
-    isStalled: boolean;
-  }>({
-    speedBps: 0,
-    etaSeconds: null,
-    isStalled: false,
-  });
   const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
+  const [metrics, setMetrics] = useRollingMetrics(metricsTrackerRef, busy);
   const [pendingStdOffer, setPendingStdOffer] = useState<PendingStandardOffer | null>(null);
   const [pendingEnhOffer, setPendingEnhOffer] = useState<PendingEnhancedOffer | null>(null);
 
@@ -112,6 +328,14 @@ export function ReceiveView({
   });
 
   const abortRef = useRef<AbortController | null>(null);
+
+  const isLocalProfile = relayProfile === "local-dual" || relayProfile === "local-lab";
+
+  const fastestProbedRelay = useMemo(() => {
+    const relayAddresses = bridgeConfig?.relayAddresses ?? [];
+    const latencies = loadRelayLatencies();
+    return findFastestRelay(latencies, relayAddresses);
+  }, [bridgeConfig]);
 
   useEffect(() => {
     if (prefillCode) {
@@ -129,16 +353,6 @@ export function ReceiveView({
   useEffect(() => {
     void refreshCacheSummary();
   }, []);
-
-  useEffect(() => {
-    if (!busy) return;
-    const interval = setInterval(() => {
-      if (metricsTrackerRef.current) {
-        setMetrics(metricsTrackerRef.current.getSnapshot());
-      }
-    }, 500);
-    return () => clearInterval(interval);
-  }, [busy]);
 
   const handleClearCache = async () => {
     await clearResumeCache();
@@ -261,9 +475,13 @@ export function ReceiveView({
         typeof window !== "undefined" ? window.location.host : "localhost:3000",
         "/ws-dual",
       );
+      const targetedNode = fastestProbedRelay
+        ? `${fastestProbedRelay.host} (${fastestProbedRelay.rttMs} ms)`
+        : undefined;
       const res = await receiveEnhancedTransfer({
         codephrase: secret,
         dualRelay,
+        targetRelayNode: targetedNode,
         baseWsUrl: wsDualUrl,
         signal: controller.signal,
         onStatus: setStatusText,
@@ -429,18 +647,18 @@ export function ReceiveView({
             <span className="font-medium text-slate-500 dark:text-slate-400">Hồ sơ Relay:</span>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold ${
-                relayProfile === "local-dual"
+                isLocalProfile
                   ? "bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-200 border border-teal-300/40"
                   : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300/40"
               }`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  relayProfile === "local-dual" ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                  isLocalProfile ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
                 }`}
                 aria-hidden="true"
               />
-              {relayProfile === "local-dual"
+              {isLocalProfile
                 ? "Local Dual-Relay Lab (Offline/LAN)"
                 : "Public Croc Relays"}
             </span>
@@ -450,17 +668,17 @@ export function ReceiveView({
               type="button"
               disabled={busy}
               onClick={() =>
-                onChangeRelayProfile(relayProfile === "local-dual" ? "public" : "local-dual")
+                onChangeRelayProfile(isLocalProfile ? "public" : "local-lab")
               }
               className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium underline-offset-2 hover:underline disabled:opacity-50"
             >
-              Đổi sang {relayProfile === "local-dual" ? "Public Croc Relays" : "Local Lab"}
+              Đổi sang {isLocalProfile ? "Public Croc Relays" : "Local Lab"}
             </button>
           )}
         </div>
 
         {/* Guidance when Local Dual-Relay Lab is active in Standard Mode */}
-        {mode === "standard" && relayProfile === "local-dual" && (
+        {mode === "standard" && isLocalProfile && (
           <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/80 p-3.5 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-200">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
@@ -611,7 +829,7 @@ export function ReceiveView({
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="truncate font-medium">{statusText}</span>
                   <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">
-                    ({relayProfile === "local-dual" ? "Local Lab" : "Public"})
+                    ({isLocalProfile ? "Local Lab" : "Public"})
                   </span>
                 </div>
                 {progressPercent > 0 && (
@@ -866,31 +1084,10 @@ export function ReceiveView({
                   </button>
                 </div>
               </div>
-              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-                {receivedFiles.map((file) => (
-                  <li
-                    key={file.relativePath}
-                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-mono font-medium text-slate-900 dark:text-slate-100">
-                        {file.relativePath}
-                      </div>
-                      <div className="font-mono text-[11px] text-slate-500">
-                        {formatBytes(file.size)} · SHA-256: {file.sha256.slice(0, 12)}…
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => downloadBinaryFile(file.name, file.bytes, file.mimeType)}
-                      className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                      Lưu tệp
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <FolderTree
+                files={receivedFiles}
+                onDownloadFile={(file) => downloadBinaryFile(file.name, file.bytes, file.mimeType)}
+              />
             </div>
           );
         })()}

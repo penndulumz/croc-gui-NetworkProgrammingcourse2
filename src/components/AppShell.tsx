@@ -30,7 +30,6 @@ interface AppShellProps {
   onToggleTheme: () => void;
   bridgeHealthy: boolean | null;
   relayProfile?: RelayProfileMode;
-  onChangeRelayProfile?: (mode: RelayProfileMode) => void;
   deviceAlias?: string;
   topBarAction?: React.ReactNode;
   children: React.ReactNode;
@@ -43,13 +42,13 @@ export const AppShell: React.FC<AppShellProps> = ({
   onToggleTheme,
   bridgeHealthy,
   relayProfile,
-  onChangeRelayProfile: _onChangeRelayProfile,
   deviceAlias,
   topBarAction,
   children,
 }) => {
   const current =
     NAV_DESTINATIONS.find((item) => item.id === activeNav) ?? NAV_DESTINATIONS[0];
+  const isLocalLab = relayProfile === "local-dual" || relayProfile === "local-lab";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#0B1120] dark:text-slate-100 transition-colors duration-200">
@@ -123,7 +122,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               >
                 <span>Hồ sơ Relay:</span>
                 <span className="font-semibold text-teal-700 dark:text-teal-300">
-                  {relayProfile === "local-dual" ? "Local Lab (LAN)" : "Public Relays"}
+                  {isLocalLab ? "Local Lab (LAN)" : "Public Relays"}
                 </span>
               </button>
             )}
@@ -173,22 +172,22 @@ export const AppShell: React.FC<AppShellProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectNav("relays")}
-                title={`Hồ sơ Relay: ${relayProfile === "local-dual" ? "Local Dual-Relay Lab (Mạng nội bộ / Offline)" : "Public Croc Relays (Công cộng)"} — Nhấp để xem & cấu hình`}
-                aria-label={`Hồ sơ Relay: ${relayProfile === "local-dual" ? "Local Lab" : "Public Relays"}`}
+                title={`Hồ sơ Relay: ${isLocalLab ? "Local Dual-Relay Lab (Mạng nội bộ / Offline)" : "Public Croc Relays (Công cộng)"} — Nhấp để xem & cấu hình`}
+                aria-label={`Hồ sơ Relay: ${isLocalLab ? "Local Lab" : "Public Relays"}`}
                 className={`inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 ${
-                  relayProfile === "local-dual"
+                  isLocalLab
                     ? "border-teal-500/50 bg-teal-50 text-teal-800 dark:border-teal-400/40 dark:bg-teal-950/60 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/60"
                     : "border-slate-200 bg-slate-100/90 text-slate-700 dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-800"
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${
-                    relayProfile === "local-dual" ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
+                    isLocalLab ? "bg-teal-500 animate-pulse" : "bg-emerald-500"
                   }`}
                   aria-hidden="true"
                 />
                 <span className="hidden sm:inline">Relay:</span>
-                <span>{relayProfile === "local-dual" ? "Local Lab" : "Public Relays"}</span>
+                <span>{isLocalLab ? "Local Lab" : "Public Relays"}</span>
               </button>
             )}
             {topBarAction}

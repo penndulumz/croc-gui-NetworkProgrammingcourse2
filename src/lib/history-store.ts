@@ -15,11 +15,13 @@ export interface TransferHistoryEntry {
   deviceAlias: string;
 }
 
+export type RelayProfileMode = "public" | "local-lab" | "local-dual";
+
 export interface PeerPreset {
   id: string;
   alias: string;
   lastSeen: number;
-  preferredRelayProfile?: "public" | "local-dual";
+  preferredRelayProfile?: RelayProfileMode;
   notes?: string;
 }
 
@@ -128,7 +130,9 @@ export function loadPeerPresets(storage?: Storage): PeerPreset[] {
             ? item.lastSeen
             : Date.now();
         const preferredRelayProfile =
-          item.preferredRelayProfile === "public" || item.preferredRelayProfile === "local-dual"
+          item.preferredRelayProfile === "public" ||
+          item.preferredRelayProfile === "local-lab" ||
+          item.preferredRelayProfile === "local-dual"
             ? item.preferredRelayProfile
             : undefined;
         const notes = typeof item.notes === "string" && item.notes.trim() ? item.notes.trim() : undefined;

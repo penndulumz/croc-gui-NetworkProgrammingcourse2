@@ -261,7 +261,6 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
     app,
     httpServer,
     dualRelayNode,
-    dualRelayHub: dualRelayNode,
     async listen(port = options.port ?? Number(process.env.PORT || 3000), host = options.host ?? "0.0.0.0") {
       await new Promise<void>((resolve) => {
         httpServer.listen(port, host, () => resolve());

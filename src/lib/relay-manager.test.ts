@@ -5,6 +5,7 @@ import {
   loadRelayProfile,
   saveRelayProfile,
   getRelayProfileEndpoints,
+  isLocalLabProfile,
   rankRelaysByLatency,
   RELAY_PROFILE_KEY,
   type RelayNodeEntry,
@@ -41,6 +42,21 @@ test("saveRelayProfile persists 'local-dual' and loadRelayProfile retrieves it",
   assert.equal(loadRelayProfile(storage), "local-dual");
 });
 
+test("saveRelayProfile persists 'local-lab' and loadRelayProfile retrieves it", () => {
+  const storage = createMemoryStorage();
+  saveRelayProfile("local-lab", storage);
+  assert.equal(storage.data[RELAY_PROFILE_KEY], "local-lab");
+  assert.equal(loadRelayProfile(storage), "local-lab");
+});
+
+test("isLocalLabProfile recognizes both 'local-lab' and 'local-dual'", () => {
+  assert.equal(isLocalLabProfile("local-lab"), true);
+  assert.equal(isLocalLabProfile("local-dual"), true);
+  assert.equal(isLocalLabProfile("public"), false);
+  assert.equal(isLocalLabProfile(undefined), false);
+  assert.equal(isLocalLabProfile(null), false);
+});
+
 test("saveRelayProfile and loadRelayProfile handle null storage gracefully", () => {
   assert.doesNotThrow(() => saveRelayProfile("public", null));
   assert.equal(loadRelayProfile(null), "public");
@@ -59,6 +75,16 @@ test("getRelayProfileEndpoints derives correct endpoints for 'public' profile", 
 test("getRelayProfileEndpoints derives correct endpoints for 'local-dual' profile", () => {
   const endpoints = getRelayProfileEndpoints("local-dual", "https:", "crocflow.campus.edu");
   assert.equal(endpoints.profile, "local-dual");
+  assert.equal(endpoints.isLocalLab, true);
+  assert.equal(endpoints.label, "Local Lab");
+  assert.equal(endpoints.badgeText, "Local Dual-Relay Lab (Offline/LAN)");
+  assert.equal(endpoints.standardBridgeURL, "wss://crocflow.campus.edu/ws");
+  assert.equal(endpoints.enhancedDualURL, "wss://crocflow.campus.edu/ws-dual");
+});
+
+test("getRelayProfileEndpoints derives correct endpoints for 'local-lab' profile", () => {
+  const endpoints = getRelayProfileEndpoints("local-lab", "https:", "crocflow.campus.edu");
+  assert.equal(endpoints.profile, "local-lab");
   assert.equal(endpoints.isLocalLab, true);
   assert.equal(endpoints.label, "Local Lab");
   assert.equal(endpoints.badgeText, "Local Dual-Relay Lab (Offline/LAN)");
