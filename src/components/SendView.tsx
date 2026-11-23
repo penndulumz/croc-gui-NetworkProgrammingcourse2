@@ -29,7 +29,8 @@ import {
   type EnhancedControlHandle,
   type EnhancedProgress,
 } from "../protocol/enhanced/enhanced-client";
-import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
+import type { BridgePublicConfig } from "../lib/bridge-client";
+import { bridgeWsURL, shareLinkOrigin } from "../lib/bridge-origin";
 import {
   appendTransferHistory,
   loadPeerPresets,
@@ -242,7 +243,7 @@ export function SendView({
 
   const shareUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/?code=${encodeURIComponent(codephrase.trim())}&mode=${mode}`
+      ? `${shareLinkOrigin()}/?code=${encodeURIComponent(codephrase.trim())}&mode=${mode}`
       : "";
 
   const cliCommand = `croc ${codephrase.trim()}`;
@@ -317,7 +318,7 @@ export function SendView({
             ? await prepareText(textPayload, { onStatus: setStatusText }, controller.signal)
             : await prepareFiles(selectedFiles, { onStatus: setStatusText }, controller.signal);
 
-        const bridgeURL = deriveBridgeURL(window.location.protocol, window.location.host, "/ws");
+        const bridgeURL = bridgeWsURL("/ws");
 
         await sendFiles({
           files: prepared,
@@ -387,11 +388,7 @@ export function SendView({
     setBusy(true);
     try {
       const inputs = await filesToManifestInputs(selectedFiles);
-      const wsDualUrl = deriveBridgeURL(
-        typeof window !== "undefined" ? window.location.protocol : "http:",
-        typeof window !== "undefined" ? window.location.host : "localhost:3000",
-        "/ws-dual",
-      );
+      const wsDualUrl = bridgeWsURL("/ws-dual");
       const targetedNode =
         targetFastestRelay && fastestProbedRelay
           ? `${fastestProbedRelay.host} (${fastestProbedRelay.rttMs} ms)`

@@ -3,6 +3,7 @@ import {
   Activity,
   CheckCircle2,
   Globe,
+  Link2,
   Plus,
   Radio,
   RefreshCw,
@@ -21,6 +22,14 @@ import {
   type RelayNodeEntry,
   type RelayProfileMode,
 } from "../lib/relay-manager";
+import {
+  clearBridgeOrigin,
+  loadSavedBridgeOrigin,
+  needsBridgeOrigin,
+  normalizeBridgeOrigin,
+  resolveBridgeOrigin,
+  saveBridgeOrigin,
+} from "../lib/bridge-origin";
 import { formatBytes } from "../lib/format";
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
@@ -31,6 +40,7 @@ export interface RelaysViewProps {
   relayProfile: RelayProfileMode;
   onChangeRelayProfile: (mode: RelayProfileMode) => void;
   onRefreshStatus: () => void;
+  onBridgeOriginChanged?: () => void;
   locale?: Locale;
 }
 
@@ -117,6 +127,7 @@ export function RelaysView({
   relayProfile,
   onChangeRelayProfile,
   onRefreshStatus,
+  onBridgeOriginChanged,
   locale = "vi",
 }: RelaysViewProps) {
   const t = getTranslations(locale);
@@ -131,6 +142,56 @@ export function RelaysView({
   const [newPort, setNewPort] = useState("9009");
   const [newPassword, setNewPassword] = useState("pass123");
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [savedOrigin, setSavedOrigin] = useState<string | null>(() => loadSavedBridgeOrigin());
+  const [originInput, setOriginInput] = useState<string>(() => loadSavedBridgeOrigin() ?? "");
+  const [originTest, setOriginTest] = useState<{
+    state: "idle" | "testing" | "ok" | "fail" | "invalid";
+    detail?: string;
+  }>({ state: "idle" });
+  const missingOrigin = !savedOrigin && needsBridgeOrigin();
+  const activeOrigin = savedOrigin ?? resolveBridgeOrigin();
+
+  const handleSaveOrigin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const stored = saveBridgeOrigin(originInput);
+    if (!stored) {
+      setOriginTest({ state: "invalid" });
+      return;
+    }
+    setSavedOrigin(stored);
+    setOriginInput(stored);
+    setOriginTest({ state: "idle" });
+    onBridgeOriginChanged?.();
+  };
+
+  const handleClearOrigin = () => {
+    clearBridgeOrigin();
+    setSavedOrigin(null);
+    setOriginInput("");
+    setOriginTest({ state: "idle" });
+    onBridgeOriginChanged?.();
+  };
+
+  const handleTestOrigin = async () => {
+    const target = originInput.trim() ? normalizeBridgeOrigin(originInput) : activeOrigin;
+    if (!target) {
+      setOriginTest({ state: "invalid" });
+      return;
+    }
+    setOriginTest({ state: "testing" });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(`${target}/healthz`, { cache: "no-store", signal: controller.signal });
+      const ok = res.ok && (await res.text()).trim() === "ok";
+      setOriginTest(ok ? { state: "ok", detail: target } : { state: "fail", detail: `HTTP ${res.status}` });
+    } catch (err) {
+      setOriginTest({ state: "fail", detail: err instanceof Error ? err.message : String(err) });
+    } finally {
+      window.clearTimeout(timer);
+    }
+  };
 
   useEffect(() => {
     setNodes((prev) => {
@@ -254,6 +315,102 @@ export function RelaysView({
           <span>{probing ? t.relays.measuring : t.relays.measureRttBtn}</span>
         </button>
       </div>
+
+      {/* Bridge Server origin (needed by the Android APK / static builds) */}
+      <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
+        <div className="flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden="true" />
+          <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {t.relays.bridgeOriginTitle}
+          </h2>
+        </div>
+        {missingOrigin ? (
+          <p
+            role="alert"
+            className="mt-2 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+          >
+            {t.relays.bridgeOriginNativeNotice}
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {savedOrigin ? t.relays.bridgeOriginActive : t.relays.bridgeOriginSameOrigin}
+            {activeOrigin && (
+              <>
+                {": "}
+                <span className="font-mono text-zinc-700 dark:text-zinc-300">{activeOrigin}</span>
+              </>
+            )}
+          </p>
+        )}
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{t.relays.bridgeOriginDesc}</p>
+
+        <form onSubmit={handleSaveOrigin} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label htmlFor="bridge-origin" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+              {t.relays.bridgeOriginLabel}
+            </label>
+            <input
+              id="bridge-origin"
+              type="text"
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              value={originInput}
+              onChange={(e) => {
+                setOriginInput(e.target.value);
+                if (originTest.state !== "testing") setOriginTest({ state: "idle" });
+              }}
+              placeholder="http://192.168.1.10:3000"
+              className="mt-1 min-h-[40px] w-full rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white focus:outline-hidden dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100 dark:focus:border-zinc-100"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={originTest.state === "testing"}
+              onClick={() => void handleTestOrigin()}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 transition-all"
+            >
+              {originTest.state === "testing" ? t.relays.bridgeOriginTesting : t.relays.bridgeOriginTestBtn}
+            </button>
+            <button
+              type="submit"
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all"
+            >
+              {t.relays.bridgeOriginSaveBtn}
+            </button>
+            {savedOrigin && (
+              <button
+                type="button"
+                onClick={handleClearOrigin}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 transition-colors"
+              >
+                {t.relays.bridgeOriginClearBtn}
+              </button>
+            )}
+          </div>
+        </form>
+        {originTest.state === "invalid" && (
+          <p role="alert" className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
+            {t.relays.bridgeOriginInvalid}
+          </p>
+        )}
+        {originTest.state === "ok" && (
+          <p className="mt-2 flex flex-wrap items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {t.relays.bridgeOriginTestOk}
+            {originTest.detail && <span className="font-mono font-normal">({originTest.detail})</span>}
+          </p>
+        )}
+        {originTest.state === "fail" && (
+          <p role="alert" className="mt-2 flex flex-wrap items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+            <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            {t.relays.bridgeOriginTestFail}
+            {originTest.detail && <span className="font-mono font-normal">({originTest.detail})</span>}
+          </p>
+        )}
+      </section>
 
       {/* Active Relay Profile Selector */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

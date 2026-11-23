@@ -9,6 +9,7 @@ import { AppDocsHubView } from "./components/AppDocsHubView";
 import { ProtocolInspector } from "./components/ProtocolInspector";
 import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
 import {
+  ensureRuntimeConfig,
   extractBridgePublicConfig,
   fetchBridgeHealth,
   fetchBridgeStatus,
@@ -104,6 +105,7 @@ export const App: React.FC = () => {
 
   const loadBridge = useCallback(async (signal?: AbortSignal) => {
     try {
+      await ensureRuntimeConfig(signal);
       const [healthy, status] = await Promise.all([
         fetchBridgeHealth(signal),
         fetchBridgeStatus(signal),
@@ -126,6 +128,13 @@ export const App: React.FC = () => {
     () => extractBridgePublicConfig(bridgeStatus),
     [bridgeStatus],
   );
+
+  const handleBridgeOriginChanged = useCallback(() => {
+    // Drop status from the previous Bridge Server before probing the new one.
+    setBridgeStatus(null);
+    setBridgeHealthy(null);
+    void loadBridge();
+  }, [loadBridge]);
 
   const handleToggleTheme = () => {
     setTheme((prev) => toggleThemeMode(prev));
@@ -255,6 +264,7 @@ export const App: React.FC = () => {
           relayProfile={relayProfile}
           onChangeRelayProfile={handleChangeRelayProfile}
           onRefreshStatus={() => void loadBridge()}
+          onBridgeOriginChanged={handleBridgeOriginChanged}
         />
       ) : activeNav === "history" ? (
         <HistoryGroupView

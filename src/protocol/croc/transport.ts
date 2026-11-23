@@ -1,4 +1,5 @@
 import { FrameDecoder, encodeFrame } from "./framing";
+import { bridgeWsURL } from "../../lib/bridge-origin";
 
 type Reader = {
   resolve(value: Uint8Array): void;
@@ -10,7 +11,7 @@ const MAX_RAW_BUFFER = 4 * 1024 * 1024;
 type SocketMode = "framed" | "handoff" | "raw";
 
 export function bridgeForPort(bridge: string, relayIndex: number, port: string) {
-  const base = new URL(bridge || "/ws", window.location.href);
+  const base = new URL(bridge || bridgeWsURL("/ws"), window.location.href);
   if (base.protocol === "http:") base.protocol = "ws:";
   if (base.protocol === "https:") base.protocol = "wss:";
   if (base.protocol !== "ws:" && base.protocol !== "wss:") {

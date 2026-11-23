@@ -12,6 +12,7 @@ import { DualRelayScheduler, type RelayLane } from "./dual-relay-scheduler";
 import { clearResumeCache, loadVerifiedChunkMap, saveVerifiedChunk } from "./resume-cache";
 import { protocolEventBus } from "../event-bus";
 import { calculateManifestFileProgress, type FileProgress } from "../../lib/metrics";
+import { bridgeWsURL } from "../../lib/bridge-origin";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -277,8 +278,7 @@ function defaultWsBaseUrl(): string {
   if (typeof window === "undefined") {
     return "ws://127.0.0.1:3000/ws-dual";
   }
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/ws-dual`;
+  return bridgeWsURL("/ws-dual");
 }
 
 function defaultWebSocketFactory(url: string): WebSocketLike {

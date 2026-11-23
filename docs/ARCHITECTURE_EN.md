@@ -8,7 +8,7 @@
 
 CrocFlow is engineered with a **React 19 + TypeScript + Tailwind CSS** core that compiles simultaneously into three distinct production artifacts:
 1. **Progressive Web App (PWA)**: Built using Vite + `vite-plugin-pwa` with full offline service worker caching and client-side IndexedDB persistence.
-2. **Mobile Android App (APK)**: Native Android deployment powered by **Capacitor** (`capacitor.config.ts`), bridging camera permissions for QR scanning and filesystem access.
+2. **Mobile Android App (APK)**: Native Android deployment powered by **Capacitor** (`capacitor.config.ts`): a WebView that loads the same static web build (no native camera QR scanner or native file picker). The APK contains no Bridge Server, so it connects to a CrocFlow `server.ts` running on a PC on the same LAN via the configurable Bridge Server address (`src/lib/bridge-origin.ts`).
 3. **Desktop App (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`)**: Packaged via **Electron** (`packaging/desktop/`), embedding a lightweight local Node.js bridge server so the desktop executable operates independently out-of-the-box.
 
 ```

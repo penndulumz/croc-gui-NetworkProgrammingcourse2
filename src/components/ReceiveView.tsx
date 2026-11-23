@@ -34,7 +34,8 @@ import {
   getResumeCacheSummary,
   type ResumeCacheSummary,
 } from "../protocol/enhanced/resume-cache";
-import { deriveBridgeURL, type BridgePublicConfig } from "../lib/bridge-client";
+import type { BridgePublicConfig } from "../lib/bridge-client";
+import { bridgeWsURL } from "../lib/bridge-origin";
 import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
 import { downloadBinaryFile, formatBytes } from "../lib/format";
@@ -428,7 +429,7 @@ export function ReceiveView({
       }
 
       try {
-        const bridgeURL = deriveBridgeURL(window.location.protocol, window.location.host, "/ws");
+        const bridgeURL = bridgeWsURL("/ws");
 
         const offer = await receiveFiles({
           secret,
@@ -499,11 +500,7 @@ export function ReceiveView({
 
     // Enhanced Mode Receive
     try {
-      const wsDualUrl = deriveBridgeURL(
-        typeof window !== "undefined" ? window.location.protocol : "http:",
-        typeof window !== "undefined" ? window.location.host : "localhost:3000",
-        "/ws-dual",
-      );
+      const wsDualUrl = bridgeWsURL("/ws-dual");
       const targetedNode = fastestProbedRelay
         ? `${fastestProbedRelay.host} (${fastestProbedRelay.rttMs} ms)`
         : undefined;

@@ -71,3 +71,68 @@ test("Unified server serves /healthz, /config.js, /api/relays/status, and reject
     await server.close();
   }
 });
+
+test("Bridge Server exposes /api/runtime-config and narrow CORS for native-shell origins", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    const runtime = await fetch(`${baseUrl}/api/runtime-config`);
+    assert.equal(runtime.status, 200);
+    assert.equal(runtime.headers.get("cache-control"), "no-store");
+    const runtimeJson = (await runtime.json()) as {
+      bridgeURL: string;
+      localDualRelayURL: string;
+      relayAddresses: string[];
+      relayPassword: string;
+    };
+    // Same object as /config.js
+    const configBody = await (await fetch(`${baseUrl}/config.js`)).text();
+    const configJson = JSON.parse(
+      configBody.replace(/^window\.__CROC_RUNTIME_CONFIG__ = /, "").replace(/;\s*$/, ""),
+    );
+    assert.deepEqual(runtimeJson, configJson);
+    assert.equal(runtimeJson.bridgeURL, "/ws");
+    assert.equal(runtimeJson.localDualRelayURL, "/ws-dual");
+    assert.ok(runtimeJson.relayAddresses.includes("1.getcroc.com:9009"));
+
+    for (const origin of ["https://localhost", "http://localhost", "capacitor://localhost"]) {
+      for (const path of ["/healthz", "/api/relays/status", "/api/runtime-config"]) {
+        const res = await fetch(`${baseUrl}${path}`, { headers: { Origin: origin } });
+        assert.equal(res.status, 200, `${path} from ${origin}`);
+        assert.equal(res.headers.get("access-control-allow-origin"), origin, `${path} from ${origin}`);
+        assert.match(res.headers.get("vary") ?? "", /Origin/);
+        await res.arrayBuffer();
+      }
+    }
+
+    // Preflight from an allowed origin
+    const preflight = await fetch(`${baseUrl}/api/relays/ping?target=alpha`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://localhost",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Private-Network": "true",
+      },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "https://localhost");
+    assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /GET/);
+    assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
+
+    // Other origins (localhost with a port, LAN or public sites) get no CORS grant
+    for (const origin of ["https://evil.example.com", "http://localhost:5173", "http://192.168.1.20"]) {
+      const res = await fetch(`${baseUrl}/api/relays/status`, { headers: { Origin: origin } });
+      assert.equal(res.headers.get("access-control-allow-origin"), null, origin);
+      await res.arrayBuffer();
+    }
+
+    // Non-API routes never carry CORS headers
+    const configJs = await fetch(`${baseUrl}/config.js`, { headers: { Origin: "https://localhost" } });
+    assert.equal(configJs.headers.get("access-control-allow-origin"), null);
+    await configJs.arrayBuffer();
+  } finally {
+    await server.close();
+  }
+});

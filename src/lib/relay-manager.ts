@@ -1,4 +1,4 @@
-import { deriveBridgeURL } from "./bridge-client";
+import { bridgeHttpURL, bridgeWsURL, deriveBridgeURL } from "./bridge-origin";
 
 export type RelayProfileMode = "public" | "local-lab" | "local-dual";
 
@@ -88,7 +88,7 @@ export async function probePublicRelays(
   await Promise.all(
     relayAddresses.map(async (addr, idx) => {
       try {
-        const res = await fetch(`/api/relays/ping?target=public&index=${idx}`, {
+        const res = await fetch(bridgeHttpURL(`/api/relays/ping?target=public&index=${idx}`), {
           cache: "no-store",
         });
         if (res.ok) {
@@ -174,14 +174,16 @@ export function saveRelayProfile(
 
 export function getRelayProfileEndpoints(
   profile: RelayProfileMode,
-  protocol = typeof window !== "undefined" ? window.location.protocol : "http:",
-  host = typeof window !== "undefined" ? window.location.host : "localhost:3000",
+  protocol?: string,
+  host?: string,
 ): RelayProfileEndpoints {
   const isLocalLab = profile === "local-lab" || profile === "local-dual";
+  // Explicit protocol/host (tests, callers) win; otherwise resolve via the Bridge Server origin.
+  const explicit = protocol !== undefined && host !== undefined;
   return {
     profile,
-    standardBridgeURL: deriveBridgeURL(protocol, host, "/ws"),
-    enhancedDualURL: deriveBridgeURL(protocol, host, "/ws-dual"),
+    standardBridgeURL: explicit ? deriveBridgeURL(protocol, host, "/ws") : bridgeWsURL("/ws"),
+    enhancedDualURL: explicit ? deriveBridgeURL(protocol, host, "/ws-dual") : bridgeWsURL("/ws-dual"),
     isLocalLab,
     label: isLocalLab ? "Local Lab" : "Public Relays",
     badgeText: isLocalLab
@@ -217,7 +219,7 @@ export async function pingRelayNode(node: RelayNodeEntry): Promise<{
   if (node.kind === "local-alpha" || node.kind === "local-beta") {
     const target = node.kind === "local-alpha" ? "alpha" : "beta";
     const started = performance.now();
-    const res = await fetch(`/api/relays/ping?target=${target}`, { cache: "no-store" });
+    const res = await fetch(bridgeHttpURL(`/api/relays/ping?target=${target}`), { cache: "no-store" });
     if (!res.ok) return { ok: false, rttMs: null, error: `HTTP ${res.status}` };
     const data = (await res.json()) as { ok: boolean; rttMs: number | null };
     const totalRtt = Math.round((performance.now() - started) * 10) / 10;
@@ -225,7 +227,7 @@ export async function pingRelayNode(node: RelayNodeEntry): Promise<{
   }
 
   if (node.kind === "public" && typeof node.publicIndex === "number") {
-    const res = await fetch(`/api/relays/ping?target=public&index=${node.publicIndex}`, {
+    const res = await fetch(bridgeHttpURL(`/api/relays/ping?target=public&index=${node.publicIndex}`), {
       cache: "no-store",
     });
     const data = (await res.json()) as { ok: boolean; rttMs: number | null; error?: string };

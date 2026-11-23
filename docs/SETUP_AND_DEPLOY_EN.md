@@ -74,6 +74,25 @@ CrocFlow uses **Capacitor** (`capacitor.config.ts`) to package the exact same we
    ```
    The generated APK will be located at: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
+#### Pointing the APK at a Bridge Server on your PC (required)
+The APK ships only the static web UI (`dist/`) and **contains no Bridge Server**. Calls to `/healthz`, `/api/*`, WebSocket `/ws` (Standard Croc v11) and `/ws-dual` (Local Dual-Relay Lab) must reach a machine running `server.ts`:
+1. On a computer on the same Wi-Fi/LAN as the phone, start the server (listens on `0.0.0.0:3000`):
+   ```bash
+   npm ci
+   npm run build
+   npm start          # or: npm run dev
+   ```
+   On Windows PowerShell use `$env:NODE_ENV="production"; npx tsx server.ts` instead of `npm start`.
+2. Find the computer's LAN IP (`ipconfig` on Windows, `ip addr` / `ifconfig` on Linux/macOS), e.g. `192.168.1.10`. Allow TCP port `3000` through the firewall.
+3. Open the APK → **Relays & Network** → **Bridge Server Address**, enter `http://192.168.1.10:3000`, press **Test** (calls `/healthz`), then **Save**. Until an address is saved the app shows an amber notice in that section.
+4. Press **Clear** to return to the default (the server that serves the page).
+
+Technical notes:
+- With no saved address and the page served by `server.ts` (web/PWA/Desktop), every URL stays same-origin exactly as before.
+- `server.ts` enables narrow CORS only for `/healthz` and `/api/*`, only for the Capacitor WebView origins (`https://localhost`, `http://localhost`, `capacitor://localhost`). Runtime config is fetched from `GET /api/runtime-config` (same object as `/config.js`).
+- `capacitor.config.ts` uses `androidScheme: "http"` + `cleartext: true` so the WebView may call `http://` / `ws://` on the LAN (with `https` those are blocked as mixed content). The CI workflow adds `android:usesCleartextTraffic="true"` to `AndroidManifest.xml`; check that attribute if you build manually.
+- The public relay list and the allowlist/SSRF checks are still enforced by the Bridge Server on the PC (`CROC_RELAY_HOSTS`, `CROC_ALLOWED_PORTS`).
+
 ---
 
 ### Method C: Desktop App (Windows .exe / macOS .dmg / Linux .AppImage)
