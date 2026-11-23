@@ -7,3 +7,5 @@ build/
 Thumbs.db
 .agent/
 .aistudio/
+# Desktop: generated embedded server bundle
+packaging/desktop/server.mjs

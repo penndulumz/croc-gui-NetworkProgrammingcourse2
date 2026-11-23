@@ -5,19 +5,16 @@
   "main": "main.mjs",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux"
-  },
-  "dependencies": {
-    "express": "^5.1.0",
-    "ws": "^8.18.2",
-    "tsx": "^4.19.3"
+    "bundle:server": "node scripts/bundle-server.mjs",
+    "start": "npm run bundle:server && electron .",
+    "dist:win": "npm run bundle:server && electron-builder --win",
+    "dist:mac": "npm run bundle:server && electron-builder --mac",
+    "dist:linux": "npm run bundle:server && electron-builder --linux"
   },
   "devDependencies": {
     "electron": "^35.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.28.2"
   },
   "build": {
     "appId": "app.crocflow.desktop",
@@ -28,9 +25,12 @@
     "files": [
       "main.mjs",
       "preload.mjs",
-      "dist/**/*",
-      "server.ts",
-      "server/**/*"
+      "server.mjs",
+      "dist/**/*"
+    ],
+    "asarUnpack": [
+      "server.mjs",
+      "dist/**/*"
     ],
     "win": {
       "target": ["nsis", "portable"]

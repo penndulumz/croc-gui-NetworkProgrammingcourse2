@@ -87,20 +87,37 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+      # Root deps are needed so esbuild can bundle express/ws at the exact
+      # versions locked for the web app.
+      - name: Install Root Dependencies
+        run: npm ci
       - uses: actions/download-artifact@v4
         with:
           name: crocflow-web-pwa-dist
           path: packaging/desktop/dist
-      - name: Stage Embedded Bridge Server
+      - name: Install Desktop Tooling
+        working-directory: packaging/desktop
+        run: npm install
+      - name: Bundle Embedded Bridge Server
+        working-directory: packaging/desktop
+        run: npm run bundle:server
+      - name: Smoke Test Embedded Bridge Bundle
+        working-directory: packaging/desktop
         shell: bash
         run: |
-          cp server.ts packaging/desktop/server.ts
-          cp -r server packaging/desktop/server
-      - name: Install & Package Electron App
+          NODE_ENV=production PORT=3999 CROCFLOW_DIST_DIR="$PWD/dist" node server.mjs &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:3999/healthz && break
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:3999/healthz
+          curl -fsS http://127.0.0.1:3999/some/spa/path | grep -qi "<html"
+      - name: Package Electron App
         working-directory: packaging/desktop
-        run: |
-          npm install
-          npm run ${{ matrix.script }}
+        run: npm run ${{ matrix.script }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

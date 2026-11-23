@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 import { createCrocFlowServer } from "../server.ts";
 import { LocalDualRelayNode } from "./local-dual-relay.ts";
@@ -70,4 +74,59 @@ test("Unified server serves /healthz, /config.js, /api/relays/status, and reject
   } finally {
     await server.close();
   }
+});
+
+test("Production SPA fallback serves index.html for unknown client routes without shadowing API routes", async () => {
+  // Dot-prefixed dir mimics installs like AppImage /tmp/.mount_* (send dotfile guard).
+  const distDir = await mkdtemp(path.join(os.tmpdir(), ".crocflow-dist-"));
+  const indexHtml = "<!doctype html><title>CrocFlow SPA</title><div id=root></div>";
+  await writeFile(path.join(distDir, "index.html"), indexHtml);
+  await writeFile(path.join(distDir, "app.js"), "console.log('asset');");
+
+  const previousDistDir = process.env.CROCFLOW_DIST_DIR;
+  process.env.CROCFLOW_DIST_DIR = distDir;
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    for (const spaPath of ["/relays", "/some/spa/path", "/"]) {
+      const res = await fetch(`${baseUrl}${spaPath}`);
+      assert.equal(res.status, 200, `GET ${spaPath}`);
+      assert.match(res.headers.get("content-type") ?? "", /text\/html/);
+      assert.equal(await res.text(), indexHtml);
+    }
+
+    const asset = await fetch(`${baseUrl}/app.js`);
+    assert.equal(asset.status, 200);
+    assert.equal(await asset.text(), "console.log('asset');");
+
+    const health = await fetch(`${baseUrl}/healthz`);
+    assert.equal(health.status, 200);
+    assert.equal((await health.text()).trim(), "ok");
+
+    const relayStatus = await fetch(`${baseUrl}/api/relays/status`);
+    assert.equal(relayStatus.status, 200);
+    assert.match(relayStatus.headers.get("content-type") ?? "", /application\/json/);
+    const statusJson = (await relayStatus.json()) as { publicRelays: unknown[] };
+    assert.ok(Array.isArray(statusJson.publicRelays));
+
+    // Non-GET requests must not be answered with the SPA shell.
+    const post = await fetch(`${baseUrl}/relays`, { method: "POST" });
+    assert.equal(post.status, 404);
+    await post.text();
+  } finally {
+    await server.close();
+    if (previousDistDir === undefined) delete process.env.CROCFLOW_DIST_DIR;
+    else process.env.CROCFLOW_DIST_DIR = previousDistDir;
+    await rm(distDir, { recursive: true, force: true });
+  }
+});
+
+test("server.ts registers no bare \"*\" route (throws under Express 5 / path-to-regexp v8)", async () => {
+  const serverSource = await readFile(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "server.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(serverSource, /\.(get|use|all|post|put|delete|head|route)\(\s*["'`]\*["'`]/);
 });

@@ -250,10 +250,22 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
     viteServer = vite;
     app.use(vite.middlewares);
   } else {
-    const distDir = path.join(__dirname, "dist");
+    // CROCFLOW_DIST_DIR lets packaged hosts (Electron desktop) point at the
+    // built web app explicitly; default stays `dist/` next to this file.
+    const distDir = process.env.CROCFLOW_DIST_DIR
+      ? path.resolve(process.env.CROCFLOW_DIST_DIR)
+      : path.join(__dirname, "dist");
     app.use(express.static(distDir));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distDir, "index.html"));
+    // SPA fallback as terminal middleware rather than a wildcard GET route: a bare
+    // "*" path throws under Express 5 (path-to-regexp v8), this works on 4 and 5.
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        next();
+        return;
+      }
+      // `root` keeps send's dotfile guard off the install path itself (e.g.
+      // AppImage mounts under /tmp/.mount_*), which Express 5 would 404.
+      res.sendFile("index.html", { root: distDir });
     });
   }
 
