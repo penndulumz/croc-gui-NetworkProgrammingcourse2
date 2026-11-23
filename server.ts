@@ -17,6 +17,13 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/** Page origins of the Capacitor Android WebView allowed to call the HTTP API cross-origin. */
+export const NATIVE_SHELL_ORIGINS: ReadonlySet<string> = new Set([
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+]);
+
 export interface CrocFlowServerOptions {
   port?: number;
   host?: string;
@@ -57,19 +64,55 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
 
   app.disable("x-powered-by");
 
-  app.get("/healthz", (_req, res) => {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.status(200).send("ok\n");
+  // Narrow CORS for the HTTP API only (/healthz, /api/*), so the Capacitor
+  // Android WebView (page origin http(s)://localhost or capacitor://localhost)
+  // can reach a Bridge Server on the LAN. WebSocket upgrades (/ws, /ws-dual)
+  // bypass Express and keep their own allowlist checks.
+  app.use((req, res, next) => {
+    if (req.path !== "/healthz" && !req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
+    const origin = req.headers.origin;
+    if (typeof origin === "string" && NATIVE_SHELL_ORIGINS.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader("Access-Control-Max-Age", "600");
+      if (req.headers["access-control-request-private-network"] === "true") {
+        res.setHeader("Access-Control-Allow-Private-Network", "true");
+      }
+    }
+    res.append("Vary", "Origin");
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    next();
   });
 
-  app.get("/config.js", (_req, res) => {
+  const buildRuntimeConfig = () => {
     const controlPort = bridgeConfig.allowedPorts[0] || "9009";
-    const runtimeConfig = {
+    return {
       bridgeURL: "/ws",
       localDualRelayURL: "/ws-dual",
       relayAddresses: bridgeConfig.relayHosts.map((host) => `${host}:${controlPort}`),
       relayPassword: bridgeConfig.relayPassword,
     };
+  };
+
+  app.get("/healthz", (_req, res) => {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.status(200).send("ok\n");
+  });
+
+  // JSON twin of /config.js for clients not served by this Bridge Server (Android APK).
+  app.get("/api/runtime-config", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(buildRuntimeConfig());
+  });
+
+  app.get("/config.js", (_req, res) => {
+    const runtimeConfig = buildRuntimeConfig();
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Type", "text/javascript; charset=utf-8");
     res.setHeader("X-Content-Type-Options", "nosniff");

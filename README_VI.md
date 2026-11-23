@@ -117,7 +117,7 @@ Mọi tiến trình mã hóa và giải mã đều diễn ra 100% tại máy kh�
 | Mục tiêu | Phương thức đóng gói | Chi tiết triển khai |
 | :--- | :--- | :--- |
 | **Web PWA** | `npm run build` | Cài đặt trực tiếp trên Chrome, Edge, Safari với bộ nhớ đệm Service Worker ngoại tuyến. |
-| **Android APK** | `npx cap sync android` | Bộ bao Capacitor tích hợp bộ chọn tệp gốc và quét mã QR camera. |
+| **Android APK** | `npx cap sync android` | Bộ bao Capacitor (WebView) chạy cùng bản build web tĩnh (chọn tệp bằng input HTML chuẩn; chưa có quét mã QR bằng camera). APK không chứa Bridge Server: hãy chạy `server.ts` trên một máy tính cùng mạng LAN rồi nhập địa chỉ (ví dụ `http://192.168.1.10:3000`) tại **Relay & Mạng → Địa chỉ Bridge Server**. Xem [Hướng dẫn cài đặt](docs/SETUP_AND_DEPLOY_VI.md). |
 | **Desktop App** | `packaging/desktop/` | Gói Electron độc lập tích hợp sẵn Bridge Server Node.js cục bộ chạy ngầm. |
 | **CI/CD** | `.github/workflows/build-releases.yml` | Tự động kiểm thử, build PWA, Android APK và Desktop cài đặt qua GitHub Actions. |
 

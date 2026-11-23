@@ -74,6 +74,25 @@ CrocFlow sử dụng **Capacitor** (`capacitor.config.ts`) để đóng gói tr�
    ```
    Tệp APK tạo ra sẽ nằm tại: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
+#### Kết nối APK với Bridge Server trên máy tính (bắt buộc)
+APK chỉ chứa giao diện web tĩnh (`dist/`), **không có Bridge Server bên trong**. Các lời gọi `/healthz`, `/api/*`, WebSocket `/ws` (Chuẩn Croc v11) và `/ws-dual` (Phòng Lab 2 Relay) phải đi tới một máy chạy `server.ts`:
+1. Trên máy tính cùng mạng Wi-Fi/LAN với điện thoại, chạy server (lắng nghe `0.0.0.0:3000`):
+   ```bash
+   npm ci
+   npm run build
+   npm start          # hoặc: npm run dev
+   ```
+   Trên Windows PowerShell dùng `$env:NODE_ENV="production"; npx tsx server.ts` thay cho `npm start`.
+2. Tìm địa chỉ IP LAN của máy tính (`ipconfig` trên Windows, `ip addr` / `ifconfig` trên Linux/macOS), ví dụ `192.168.1.10`. Cho phép cổng TCP `3000` qua tường lửa.
+3. Mở APK → **Relay & Mạng** → mục **Địa chỉ Bridge Server**, nhập `http://192.168.1.10:3000`, bấm **Kiểm tra** (gọi `/healthz`), rồi **Lưu**. Khi chưa cấu hình, ứng dụng hiển thị cảnh báo màu vàng ở mục này.
+4. Bấm **Xóa** để quay lại mặc định (dùng chính máy chủ phục vụ trang).
+
+Ghi chú kỹ thuật:
+- Khi không có địa chỉ đã lưu và trang được `server.ts` phục vụ (bản web/PWA/Desktop), mọi URL vẫn là same-origin như trước.
+- `server.ts` bật CORS hẹp chỉ cho `/healthz` và `/api/*`, chỉ với origin của WebView Capacitor (`https://localhost`, `http://localhost`, `capacitor://localhost`). Cấu hình runtime được lấy qua `GET /api/runtime-config` (cùng nội dung với `/config.js`).
+- `capacitor.config.ts` dùng `androidScheme: "http"` + `cleartext: true` để WebView được phép gọi `http://` / `ws://` tới máy trong LAN (với `https` sẽ bị chặn do mixed content). Workflow CI thêm `android:usesCleartextTraffic="true"` vào `AndroidManifest.xml`; nếu tự build, hãy kiểm tra thuộc tính này.
+- Danh sách Relay công cộng và kiểm tra allowlist/SSRF vẫn do Bridge Server trên máy tính quyết định (`CROC_RELAY_HOSTS`, `CROC_ALLOWED_PORTS`).
+
 ---
 
 ### Cách 3: Ứng Dụng Máy Tính Desktop (Windows .exe / macOS .dmg / Linux .AppImage)

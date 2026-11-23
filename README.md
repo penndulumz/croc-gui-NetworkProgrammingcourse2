@@ -117,7 +117,7 @@ All encryption and decryption occur strictly on the user's client machine:
 | Target | Build Method | Details |
 | :--- | :--- | :--- |
 | **Web PWA** | `npm run build` | Installable directly in Chrome, Edge, and Safari with offline Workbox caching. |
-| **Android APK** | `npx cap sync android` | Capacitor wrapper with native file picker and camera QR scanner. |
+| **Android APK** | `npx cap sync android` | Capacitor WebView wrapper around the same static web build (standard HTML file input; no camera QR scanner). It has no Bridge Server inside: run `server.ts` on a PC on the same LAN and enter its address (e.g. `http://192.168.1.10:3000`) under **Relays & Network → Bridge Server Address**. See [Setup Guide](docs/SETUP_AND_DEPLOY_EN.md). |
 | **Desktop App** | `packaging/desktop/` | Standalone Electron package embedding a background loopback Node bridge. |
 | **CI/CD** | `.github/workflows/build-releases.yml` | Automated GitHub Actions workflow building Web, APK, and Desktop artifacts. |
 

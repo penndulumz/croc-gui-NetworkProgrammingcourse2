@@ -8,7 +8,7 @@
 
 CrocFlow được xây dựng trên nền tảng **React 19 + TypeScript + Tailwind CSS** hiện đại, biên dịch đồng thời ra 3 dạng ứng dụng phục vụ người dùng cuối:
 1. **Ứng dụng Web PWA (Progressive Web App)**: Đóng gói bởi Vite + `vite-plugin-pwa`, hỗ trợ Service Worker cache tài nguyên ngoại tuyến và lưu trữ dữ liệu cục bộ bằng IndexedDB.
-2. **Ứng dụng Di động Android (APK)**: Đóng gói thông qua **Capacitor** (`capacitor.config.ts`), tích hợp quyền truy cập camera quét mã QR và bộ nhớ tệp.
+2. **Ứng dụng Di động Android (APK)**: Đóng gói thông qua **Capacitor** (`capacitor.config.ts`): một WebView tải cùng bản build web tĩnh (chưa có quét mã QR bằng camera hay bộ chọn tệp gốc). APK không chứa Bridge Server nên kết nối tới `server.ts` của CrocFlow chạy trên máy tính cùng mạng LAN thông qua địa chỉ Bridge Server cấu hình được (`src/lib/bridge-origin.ts`).
 3. **Ứng dụng Máy tính Desktop (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`)**: Đóng gói qua **Electron** (`packaging/desktop/`), tích hợp sẵn Bridge Server Node.js cục bộ chạy ngầm, tải về mở lên là dùng được ngay.
 
 ```

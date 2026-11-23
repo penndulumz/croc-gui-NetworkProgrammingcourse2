@@ -155,6 +155,19 @@ export interface Translations {
     customHostLabel: string;
     customPortLabel: string;
     saveRelayBtn: string;
+    bridgeOriginTitle: string;
+    bridgeOriginDesc: string;
+    bridgeOriginLabel: string;
+    bridgeOriginSaveBtn: string;
+    bridgeOriginTestBtn: string;
+    bridgeOriginClearBtn: string;
+    bridgeOriginNativeNotice: string;
+    bridgeOriginSameOrigin: string;
+    bridgeOriginActive: string;
+    bridgeOriginInvalid: string;
+    bridgeOriginTesting: string;
+    bridgeOriginTestOk: string;
+    bridgeOriginTestFail: string;
   };
   history: {
     title: string;
@@ -410,6 +423,19 @@ export const DICTIONARY: Record<Locale, Translations> = {
       customHostLabel: "Địa chỉ Host / IP",
       customPortLabel: "Cổng TCP",
       saveRelayBtn: "Lưu Relay",
+      bridgeOriginTitle: "Địa chỉ Bridge Server",
+      bridgeOriginDesc: "Ứng dụng Android (APK) không có Bridge Server bên trong. Nhập địa chỉ máy tính đang chạy CrocFlow server trong cùng mạng LAN, ví dụ http://192.168.1.10:3000.",
+      bridgeOriginLabel: "Địa chỉ (origin)",
+      bridgeOriginSaveBtn: "Lưu",
+      bridgeOriginTestBtn: "Kiểm tra",
+      bridgeOriginClearBtn: "Xóa",
+      bridgeOriginNativeNotice: "Đang chạy trong ứng dụng Android nhưng chưa cấu hình Bridge Server. Hãy chạy CrocFlow server trên máy tính cùng mạng LAN và nhập địa chỉ bên dưới để gửi/nhận tệp.",
+      bridgeOriginSameOrigin: "Đang dùng Bridge Server phục vụ trang này",
+      bridgeOriginActive: "Đang dùng Bridge Server",
+      bridgeOriginInvalid: "Địa chỉ không hợp lệ. Dùng dạng http://IP:cổng, ví dụ http://192.168.1.10:3000.",
+      bridgeOriginTesting: "Đang kiểm tra...",
+      bridgeOriginTestOk: "Bridge Server phản hồi /healthz thành công",
+      bridgeOriginTestFail: "Không kết nối được Bridge Server",
     },
     history: {
       title: "Lịch sử & Nhóm làm việc",
@@ -663,6 +689,19 @@ export const DICTIONARY: Record<Locale, Translations> = {
       customHostLabel: "Host / IP Address",
       customPortLabel: "TCP Port",
       saveRelayBtn: "Save Relay",
+      bridgeOriginTitle: "Bridge Server Address",
+      bridgeOriginDesc: "The Android app (APK) has no Bridge Server inside. Enter the address of a computer running the CrocFlow server on the same LAN, e.g. http://192.168.1.10:3000.",
+      bridgeOriginLabel: "Address (origin)",
+      bridgeOriginSaveBtn: "Save",
+      bridgeOriginTestBtn: "Test",
+      bridgeOriginClearBtn: "Clear",
+      bridgeOriginNativeNotice: "Running inside the Android app with no Bridge Server configured. Start the CrocFlow server on a computer on the same LAN and enter its address below to send or receive files.",
+      bridgeOriginSameOrigin: "Using the Bridge Server that serves this page",
+      bridgeOriginActive: "Using Bridge Server",
+      bridgeOriginInvalid: "Invalid address. Use http://IP:port, e.g. http://192.168.1.10:3000.",
+      bridgeOriginTesting: "Testing...",
+      bridgeOriginTestOk: "Bridge Server answered /healthz",
+      bridgeOriginTestFail: "Could not reach the Bridge Server",
     },
     history: {
       title: "History & Collaboration Groups",
