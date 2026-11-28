@@ -497,7 +497,11 @@ export function ReceiveView({
       return;
     }
 
-    // Enhanced Mode Receive
+    // Enhanced Mode Receive:
+    // Chuẩn bị ngữ cảnh Relay (cấu hình Public Croc Relays hoặc Local Dual-Relay Lab cùng cặp RTT Alpha/Beta)
+    // trước khi mở kênh nhận. Máy nhận có thể khởi động trước máy gửi: endpoint sẽ phát `peer_count` khi
+    // đối tác vào phòng để máy nhận gửi `pake-init` idempotent, sau đó phản hồi `resume-plan` kèm cờ
+    // `dualRelayAccepted` giúp hai đầu thống nhất chạy Dual-Relay Transfer hay thu gọn về 1 kênh Relay Alpha.
     try {
       const wsDualUrl = bridgeWsURL("/ws-dual");
       const relayContext = await prepareEnhancedRelayContext({
@@ -506,6 +510,7 @@ export function ReceiveView({
         bridgeConfig,
         latencies: loadRelayLatencies(),
       });
+      // Nạp cặp RTT Alpha/Beta đã đo/phân giải để truyền xuống StreamInspectorDrawer khi hiển thị.
       setStreamPairRtts(relayContext.streamPairRtts);
       const res = await receiveEnhancedTransfer({
         codephrase: secret,
@@ -800,7 +805,7 @@ export function ReceiveView({
               </div>
             )}
 
-            {/* Expandable Dual-Relay Stream Stats Drawer */}
+            {/* Bảng soi luồng Dual-Relay: truyền RTT cặp Alpha/Beta từ `streamPairRtts` đã phân giải */}
             {mode === "enhanced" && enhProgress && (
               <StreamInspectorDrawer
                 progress={enhProgress}

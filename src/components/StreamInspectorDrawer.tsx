@@ -10,6 +10,7 @@ export interface StreamInspectorDrawerProps {
   betaRttMs?: number | null;
 }
 
+// Phân biệt badge độ trễ thực đo (`<rttMs>ms`) với trạng thái chưa có dữ liệu đo (`RTT: N/A` khi `null`/`undefined`).
 function renderRttBadge(rttLabel: string, rttMs?: number | null) {
   if (typeof rttMs === "number") {
     return (
@@ -43,6 +44,8 @@ export function StreamInspectorDrawer({
 }: StreamInspectorDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const t = getTranslations(locale);
+  // Kiểm tra chặt `betaAlive === false` để phân biệt kênh Beta bị ngắt giữa phiên truyền
+  // với trường hợp `undefined` ở chế độ 1 kênh (khi kênh Beta không được mở nên giữ `RTT: N/A`).
   const alphaSevered = !progress.alphaAlive;
   const betaSevered = progress.betaAlive === false;
 

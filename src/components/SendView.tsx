@@ -128,6 +128,8 @@ export function SendView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Bộ đếm đơn điệu và cờ chỉnh sửa thủ công nhằm chống race condition khi probe độ trễ bất đồng bộ:
+  // nếu người dùng tự sửa Codephrase, chuyển Hồ Sơ Relay, hoặc đã bắt đầu Phiên Truyền thì kết quả cũ bị bỏ qua.
   const targetFastestRelayRef = useRef(targetFastestRelay);
   targetFastestRelayRef.current = targetFastestRelay;
   const busyRef = useRef(busy);
@@ -141,9 +143,12 @@ export function SendView({
     return findFastestRelay(latencies, relayAddresses);
   }, [bridgeConfig]);
 
+  // Sinh Codephrase tối ưu độ trễ cho Standard Mode và Enhanced Mode khi dùng Hồ Sơ Relay Public Croc Relays:
+  // chọn trước Relay Node có RTT thấp nhất rồi tìm Codephrase có hàm băm relayIndex trỏ đúng vào nút đó.
   const autoGenerateCode = useCallback(
     async (targetMode: SendMode = mode) => {
       const seq = ++codeGenSeqRef.current;
+      // Kiểm tra lượt sinh hiện tại đã lỗi thời chưa (có lượt mới hơn, đang truyền, hoặc người dùng đã tự nhập Codephrase).
       const isStale = () =>
         codeGenSeqRef.current !== seq || busyRef.current || userEditedCodeRef.current;
 
@@ -184,6 +189,7 @@ export function SendView({
 
   useEffect(() => {
     if (prefillCode) {
+      // Đánh dấu Codephrase đã được nạp sẵn từ ngoài để hủy mọi probe tự động sinh mã đang chạy dở.
       codeGenSeqRef.current += 1;
       userEditedCodeRef.current = true;
       setCodephrase(prefillCode);
@@ -406,11 +412,13 @@ export function SendView({
       return;
     }
 
-    // Enhanced Mode: Folder Manifest + SHA-256 + Dual-Relay
+    // Enhanced Mode: Folder Manifest + SHA-256 + Dual-Relay Transfer
     if (selectedFiles.length === 0) {
       setErrorText("Hãy chọn ít nhất 1 tệp hoặc 1 thư mục cần gửi.");
       return;
     }
+    // Chuẩn bị ngữ cảnh Relay cho Enhanced Mode theo Hồ Sơ Relay đang chọn (`public` hoặc `local-lab`):
+    // phân giải cặp Relay Alpha/Beta công cộng (nếu cần) và trích xuất RTT đo được cho từng kênh.
     let relayContext: Awaited<ReturnType<typeof prepareEnhancedRelayContext>>;
     try {
       relayContext = await prepareEnhancedRelayContext({
@@ -430,6 +438,7 @@ export function SendView({
     try {
       const inputs = await filesToManifestInputs(selectedFiles);
       const wsDualUrl = bridgeWsURL("/ws-dual");
+      // Cập nhật RTT của cặp kênh Alpha/Beta để StreamInspectorDrawer hiển thị ngay khi Phiên Truyền chạy.
       setStreamPairRtts(relayContext.streamPairRtts);
 
       const res = await sendEnhancedTransfer({
@@ -439,6 +448,7 @@ export function SendView({
         relayProfile,
         publicRelaySettings: relayContext.publicRelaySettings,
         chunkSize,
+        // Đặt chunkDelayMs = 0 để không chèn setTimeout giữa các Chunk, tránh trình duyệt bóp timer ở tab nền.
         chunkDelayMs: 0,
         baseWsUrl: wsDualUrl,
         signal: controller.signal,
@@ -830,6 +840,7 @@ export function SendView({
                   value={codephrase}
                   disabled={busy}
                   onChange={(e) => {
+                    // Tăng seq và bật cờ chỉnh sửa thủ công để các probe độ trễ đang chạy không ghi đè giá trị người dùng nhập.
                     codeGenSeqRef.current += 1;
                     userEditedCodeRef.current = true;
                     setCodephrase(e.target.value);
@@ -982,6 +993,8 @@ export function SendView({
                 <X className="h-4 w-4" aria-hidden="true" />
                 {t.send.cancelBtn}
               </button>
+              {/* Chỉ bật nút giả lập ngắt Relay Alpha khi Beta thực sự đang sống (`betaAlive === true`)
+                  để tránh kích hoạt Failover khi phiên bị thu gọn về 1 kênh hoặc Beta chưa/không còn hoạt động. */}
               {mode === "enhanced" && dualRelay && (!enhProgress || (enhProgress.alphaAlive && enhProgress.betaAlive === true)) && (
                 <button
                   type="button"

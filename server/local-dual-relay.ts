@@ -61,6 +61,8 @@ export function isValidRoomId(value: string | null): value is string {
  * - Live byte and chunk counters exposed via `/api/relays/status`.
  */
 export class LocalDualRelayNode {
+  // Hai bảng phòng độc lập cho kênh Alpha và kênh Beta dưới endpoint `/ws-dual`,
+  // đảm bảo lưu lượng Chunk chẵn/lẻ ghép cặp theo (channel, roomId) hoàn toàn tách biệt.
   private channels: Record<LocalRelayChannel, Map<string, Set<RoomPeer>>> = {
     alpha: new Map(),
     beta: new Map(),
@@ -96,7 +98,8 @@ export class LocalDualRelayNode {
     };
     peers.add(peer);
 
-    // Notify existing peers and the newly joined peer that a counterpart is present
+    // Phát `peer_count` ngay khi một máy vào phòng để hỗ trợ kịch bản máy nhận vào trước:
+    // máy nhận chỉ bắt đầu phát `pake-init` khi thấy `count >= 2`, tránh rơi mất gói khởi tạo PAKE.
     this.notifyPeerCount(channel, roomId);
 
     socket.on("message", (data, isBinary) => {
@@ -108,7 +111,8 @@ export class LocalDualRelayNode {
             ? data.byteLength
             : Buffer.byteLength(String(data));
 
-      // Lightweight ping/pong control frame for real RTT measurement
+      // Khung điều khiển `__ping__`/`__pong__` dùng để client đo RTT thực tới Local Dual-Relay Lab:
+      // phản hồi trực tiếp về đúng socket gửi và không chuyển tiếp hay tính vào thống kê Chunk.
       if (!isBinary) {
         const text = data.toString("utf8");
         if (text === "__ping__") {
@@ -139,6 +143,7 @@ export class LocalDualRelayNode {
         if (cur.size === 0) {
           channelMap.delete(roomId);
         } else {
+          // Thông báo lại `peer_count` cho máy còn lại khi đối tác rời phòng hoặc mất kết nối.
           this.notifyPeerCount(channel, roomId);
         }
       }
@@ -148,6 +153,7 @@ export class LocalDualRelayNode {
     socket.on("error", cleanup);
   }
 
+  // Phát sĩ số hiện tại trong phòng của từng kênh (`alpha`/`beta`) giúp hai đầu nhận biết trạng thái ghép cặp.
   private notifyPeerCount(channel: LocalRelayChannel, roomId: string) {
     const peers = this.channels[channel].get(roomId);
     if (!peers) return;
