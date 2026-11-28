@@ -322,7 +322,9 @@ export function ReceiveView({
 }: ReceiveViewProps) {
   const t = getTranslations(locale);
   const [mode, setMode] = useState<ReceiveMode>(prefillMode ?? "enhanced");
-  const [codephrase, setCodephrase] = useState(prefillCode ?? "");
+  const [codephrase, setCodephrase] = useState(() =>
+    prefillCode ? sanitizeCodephraseInput(prefillCode) : "",
+  );
   const [dualRelay, setDualRelay] = useState(true);
 
   const [busy, setBusy] = useState(false);
@@ -358,7 +360,7 @@ export function ReceiveView({
 
   useEffect(() => {
     if (prefillCode) {
-      setCodephrase(prefillCode);
+      setCodephrase(sanitizeCodephraseInput(prefillCode));
       if (prefillMode) setMode(prefillMode);
       onClearPrefill?.();
     }

@@ -1022,3 +1022,192 @@ test("Enhanced SPAKE2 PAKE rejects mismatched codephrase in the same room immedi
     await server.close();
   }
 });
+
+test("Enhanced Dual-Relay negotiates down to Beta when Receiver Alpha dies during PAKE while Sender Alpha remains open", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+
+    const recvDropAlphaWsFactory = (url: string): WebSocketLike => {
+      const ws = nodeWsFactory(url);
+      if (url.includes("channel=alpha") && url.includes("role=receiver")) {
+        const rawWs = ws as unknown as WebSocket;
+        rawWs.once("open", () => {
+          setTimeout(() => {
+            try {
+              ws.close(4003, "Receiver Alpha dropped during PAKE");
+            } catch {}
+          }, 25);
+        });
+      }
+      return ws;
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-recv-alpha-drop-pake",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-recv-alpha-drop-pake",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: recvDropAlphaWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    recvPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Asymmetric Receiver Alpha drop hung")), 3000),
+      ),
+    ]);
+
+    assert.equal(sendRes.alphaDelivered, 0);
+    assert.equal(sendRes.betaDelivered, 7);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
+test("Enhanced Dual-Relay watchdog fails over silent/zombie Alpha lane to healthy Beta lane", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+
+    // Sender's Alpha connects to a silent zombie room (stays open, never closes, never reaches receiver)
+    const zombieAlphaSenderWsFactory = (url: string): WebSocketLike => {
+      const parsed = new URL(url);
+      if (parsed.searchParams.get("channel") === "alpha") {
+        parsed.searchParams.set("room", `${parsed.searchParams.get("room")}-zombie`);
+      }
+      return nodeWsFactory(parsed.toString());
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-zombie-alpha-watchdog",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: zombieAlphaSenderWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-zombie-alpha-watchdog",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    recvPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Zombie Alpha watchdog timed out")), 6000),
+      ),
+    ]);
+
+    assert.equal(sendRes.alphaDelivered, 0);
+    assert.equal(sendRes.betaDelivered, 7);
+    assert.ok(sendRes.failoverRerouted > 0);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
+test("Enhanced Dual-Relay with relayProfile='public' falls back to Beta when Alpha connect fails", async () => {
+  const { fakeConnectRelay } = createVirtualCrocConnector();
+  const files = makeTestFiles(false);
+  const { adapter } = createMemoryCache();
+  const publicSettings = {
+    bridgeURL: "ws://unused/ws",
+    relayAddresses: ["1.getcroc.com:9009", "2.getcroc.com:9009", "3.getcroc.com:9009", "4.getcroc.com:9009"],
+    relayPassword: "pass123",
+  };
+
+  const alphaFailsForSender = async (
+    settings: unknown,
+    room: string,
+    port: string,
+    relayIndex: number,
+  ) => {
+    if (room.endsWith("-alpha")) {
+      throw new Error("Simulated Alpha relay unreachable");
+    }
+    return fakeConnectRelay(settings, room, port, relayIndex);
+  };
+
+  const sendPromise = sendEnhancedTransfer({
+    files,
+    codephrase: "4281-public-beta-only-fallback",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: alphaFailsForSender as never,
+    chunkSize: 16 * 1024,
+    emitInspector: false,
+  });
+
+  await new Promise((r) => setTimeout(r, 20));
+
+  const recvPromise = receiveEnhancedTransfer({
+    codephrase: "4281-public-beta-only-fallback",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: fakeConnectRelay as never,
+    cache: adapter,
+    emitInspector: false,
+  });
+
+  const [sendRes, recvRes] = await Promise.race([
+    Promise.all([sendPromise, recvPromise]),
+    new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("Public Alpha-failure Beta-fallback timed out")), 3000),
+    ),
+  ]);
+
+  assert.equal(sendRes.alphaDelivered, 0);
+  assert.equal(sendRes.betaDelivered, 7);
+  assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+  assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+});

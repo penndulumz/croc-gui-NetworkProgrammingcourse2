@@ -124,9 +124,14 @@ export const App: React.FC = () => {
     return () => controller.abort();
   }, [loadBridge]);
 
+  const rawBridgeConfig = extractBridgePublicConfig(bridgeStatus);
+  const bridgeConfigKey = rawBridgeConfig
+    ? `${rawBridgeConfig.relayAddresses.join(",")}::${rawBridgeConfig.relayPassword}`
+    : "";
   const bridgeConfig = useMemo(
-    () => extractBridgePublicConfig(bridgeStatus),
-    [bridgeStatus],
+    () => rawBridgeConfig,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bridgeConfigKey],
   );
 
   const handleBridgeOriginChanged = useCallback(() => {

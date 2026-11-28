@@ -74,11 +74,12 @@ export class DualRelayScheduler {
    *   Chunk lẻ (1, 3, 5...) đi qua Relay Beta.
    * - Khi `dualEnabled = false` (chế độ 1 kênh Relay Alpha): toàn bộ Chunk gán vào Relay Alpha và `betaAlive = false`.
    */
-  constructor(chunkIndices: number[], dualEnabled = true) {
+  constructor(chunkIndices: number[], dualEnabled = true, singleLane: RelayLane = "alpha") {
     this.dualEnabled = dualEnabled;
-    this.betaAlive = dualEnabled;
+    this.alphaAlive = dualEnabled ? true : singleLane === "alpha";
+    this.betaAlive = dualEnabled ? true : singleLane === "beta";
     for (const idx of chunkIndices) {
-      const lane: RelayLane = dualEnabled ? (idx % 2 === 0 ? "alpha" : "beta") : "alpha";
+      const lane: RelayLane = dualEnabled ? (idx % 2 === 0 ? "alpha" : "beta") : singleLane;
       this.items.set(idx, {
         globalIndex: idx,
         initialLane: lane,

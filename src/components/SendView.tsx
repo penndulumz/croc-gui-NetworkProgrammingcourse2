@@ -137,6 +137,8 @@ export function SendView({
   busyRef.current = busy;
   const codeGenSeqRef = useRef(0);
   const userEditedCodeRef = useRef(false);
+  const initialAutoCodeDoneRef = useRef(false);
+  const mountedAtRef = useRef(Date.now());
   const [probedLatenciesVersion, setProbedLatenciesVersion] = useState(0);
 
   const fastestProbedRelay = useMemo(() => {
@@ -205,15 +207,21 @@ export function SendView({
       // Đánh dấu Codephrase đã được nạp sẵn từ ngoài để hủy mọi probe tự động sinh mã đang chạy dở.
       codeGenSeqRef.current += 1;
       userEditedCodeRef.current = true;
+      initialAutoCodeDoneRef.current = true;
       setCodephrase(sanitizeCodephraseInput(prefillCode));
       setOptimizedRelay(null);
       onClearPrefill?.();
       return;
     }
-    if (!userEditedCodeRef.current && !busyRef.current) {
-      void autoGenerateCode(mode, false);
+    if (!initialAutoCodeDoneRef.current && !userEditedCodeRef.current && !busyRef.current) {
+      if (bridgeConfig && bridgeConfig.relayAddresses.length > 0) {
+        initialAutoCodeDoneRef.current = true;
+        if (Date.now() - mountedAtRef.current <= 300) {
+          void autoGenerateCode(mode, false);
+        }
+      }
     }
-  }, [prefillCode, onClearPrefill, autoGenerateCode, mode]);
+  }, [prefillCode, onClearPrefill, autoGenerateCode, mode, bridgeConfig]);
 
   useEffect(() => {
     if (selectedPeer) {
@@ -338,6 +346,7 @@ export function SendView({
       setErrorText("Codephrase không hợp lệ (tối thiểu 6 ký tự, chỉ chứa chữ cái, số, gạch ngang).");
       return;
     }
+    userEditedCodeRef.current = true;
 
     if (mode === "standard") {
       if (payloadKind === "files" && selectedFiles.length === 0) {

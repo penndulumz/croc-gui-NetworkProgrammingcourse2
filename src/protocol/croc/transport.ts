@@ -147,7 +147,7 @@ export class CrocSocket {
       throw this.failure ?? new Error("Relay connection is not open");
     }
     while (this.socket.bufferedAmount > 4 * 1024 * 1024) {
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 10));
       if (this.failure) throw this.failure;
       if (this.socket.readyState !== WebSocket.OPEN) {
         throw new Error("Relay connection closed while sending");
