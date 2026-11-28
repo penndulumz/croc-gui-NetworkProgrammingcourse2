@@ -57,6 +57,11 @@ Bảng thuật ngữ chuẩn hóa cho CrocFlow, hệ thống truyền tệp mã 
 - **VI**: Máy chủ trung gian có địa chỉ định tuyến (relay công cộng, relay lab cục bộ hoặc relay tự dựng) ghép cặp hai máy trong cùng một phòng mà không đọc nội dung mã hóa.
 - _Avoid / Tránh_: Broker, hub, mirror, máy chủ proxy
 
+### Relay Profile (Hồ Sơ Relay)
+- **EN**: The active routing selection (`Public Croc Relays` or `Local Dual-Relay Lab`) governing whether both Standard Mode and Enhanced Mode traverse the Bridge Server to public Croc relays or the embedded local dual-relay lab.
+- **VI**: Cấu hình định tuyến đang chọn (`Public Croc Relays` hoặc `Local Dual-Relay Lab`) quyết định cả Chế độ Chuẩn và Chế độ Nâng cao đi qua Bridge Server tới cụm Croc công cộng hay phòng lab 2 relay cục bộ.
+- _Avoid / Tránh_: Network mode, server preset, transport profile, chế độ mạng
+
 ### Dual-Relay Transfer (Truyền Song Song 2 Relay)
 - **EN**: An Enhanced Mode delivery strategy that streams even-indexed chunks (`0, 2, 4...`) over Relay Alpha and odd-indexed chunks (`1, 3, 5...`) over Relay Beta concurrently.
 - **VI**: Chiến lược truyền dữ liệu trong Chế độ Nâng cao chia đồng thời các chunk chẵn qua Relay Alpha và chunk lẻ qua Relay Beta.
