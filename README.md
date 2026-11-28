@@ -1,140 +1,108 @@
-<div align="center">
+# CrocFlow
 
-# 🐊 CrocFlow
+[English](README.md) | [Tiếng Việt](README_VI.md)
 
-**Modern, Cross-Platform End-to-End Encrypted File Transfer Engine**  
-*100% Wire-Compatible with `croc` v11 CLI · Concurrent Dual-Relay Streaming · SHA-256 Chunk Resume*
+CrocFlow is a cross-platform, end-to-end encrypted file, folder, and text transfer application implemented in TypeScript and React. It provides a wire-compatible implementation of the Croc v11 protocol for interoperability with the official Go `croc` CLI and `getcroc.com`, alongside an Enhanced Mode with Folder Manifests, per-chunk SHA-256 Resume Cache in IndexedDB, and Dual-Relay Transfer with symmetric Failover.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![TypeScript: 5.8](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
-[![React: 19](https://img.shields.io/badge/React-19-cyan.svg)](https://react.dev/)
-[![Tailwind CSS: v4](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8.svg)](https://tailwindcss.com/)
-[![PWA: Ready](https://img.shields.io/badge/PWA-Ready-purple.svg)](https://web.dev/progressive-web-apps/)
-[![Security: Zero--Knowledge](https://img.shields.io/badge/Security-Zero--Knowledge-green.svg)](#security--cryptography)
+## Transfer Modes
 
-[**English Guide**](README.md) · [**Bản Tiếng Việt**](README_VI.md) · [**Live Demo Guide**](docs/DEMO_GUIDE_EN.md) · [**Architecture**](docs/ARCHITECTURE_EN.md) · [**Networking Guide**](docs/NETWORKING_GUIDE_EN.md)
+| Capability | Standard Mode (Croc v11) | Enhanced Mode (CrocFlow) |
+| :--- | :--- | :--- |
+| Peer compatibility | Official `croc` v11 CLI and `getcroc.com` | CrocFlow-to-CrocFlow peers |
+| Key exchange | PAKE v2 (SPAKE2 on NIST P-256) + HKDF-SHA-256 | Ephemeral ECDH (NIST P-256) bound with Codephrase via HKDF-SHA-256 |
+| Payload encryption | AES-256-GCM (12-byte IV), raw DEFLATE compression | AES-256-GCM (12-byte random IV per message) |
+| Integrity verification | XXH64 file digest | Per-chunk SHA-256 and whole-file SHA-256 |
+| Folder and resume support | Croc v11 bundle framing | Folder Manifest with path sanitization and IndexedDB Resume Cache |
+| Relay routing | Single Relay Node selected by Codephrase | Single or Dual-Relay Transfer (even Chunks on Relay Alpha, odd Chunks on Relay Beta) with Failover |
+| Inspection | Protocol Inspector (handshake and transfer progress) | Protocol Inspector (handshake, per-lane Chunk matrix, measured RTT, Failover state) |
 
-</div>
+## Architecture
 
----
-
-## 📖 Overview
-
-**CrocFlow** is an open-source, multiplatform secure file transfer application designed for computer networking education, research, and daily peer-to-peer productivity. It implements a clean, native **TypeScript** port of the Croc v11 protocol stack that communicates directly with official Croc relay infrastructure and the original Go `croc` CLI tool, while extending the protocol with an **Enhanced Mode** for advanced, high-reliability networking scenarios.
-
-### Why CrocFlow?
-- **Unified Single Codebase**: One single React + TypeScript codebase targets **Web PWA**, **Android APK** (via Capacitor), and **Desktop** Windows/macOS/Linux (via Electron).
-- **100% Wire Interoperability**: Transmit files or secure text seamlessly between a web browser and a terminal running `croc send` / `croc <codephrase>`.
-- **Concurrent Dual-Relay Streaming**: Interleaves even chunks over **Relay Alpha** and odd chunks over **Relay Beta**, doubling bandwidth utilization and demonstrating dynamic multi-path routing.
-- **Automated Live Failover**: Automatically reroutes in-flight chunks to the surviving relay without restarting the transfer if one relay disconnects.
-- **SHA-256 Folder Manifest & IndexedDB Resume**: Preserves complete directory hierarchies, sanitizes paths against directory traversal (`../`), caches verified chunks in browser IndexedDB, and automatically detects newly added files upon reconnection.
-- **Real-Time Protocol Inspector**: Visualizes PAKE/ECDH handshakes, per-chunk relay routing, rolling transfer throughput, and live diagnostic events.
-- **Full Bilingual Support (EN & VI)**: Instant in-app language switching between English and Vietnamese with persistent preference.
-
----
-
-## 🏛 Architecture at a Glance
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   CrocFlow UI (React 19 + TypeScript)                  │
-│       [Send]   [Receive]   [Relays]   [History/Groups]   [Docs Hub]    │
-│            │                              │                            │
-│    (Standard Croc v11)           (Enhanced CrocFlow Mode)              │
-│    src/protocol/croc/*           src/protocol/enhanced/*               │
-│    PAKE v2 · AES-GCM · XXH64     ECDH · SHA-256 · IndexedDB · 2 Relays │
-└────────────┬──────────────────────────────┬────────────────────────────┘
-             │ WebSocket /ws                │ WebSocket /ws-dual
-             ▼                              ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│              Unified Node.js Bridge Server (server.ts)                 │
-│  • /ws       ➔ Allowlisted TCP bridge (Anti-SSRF) to Croc Relays       │
-│  • /ws-dual  ➔ Local Dual-Relay Lab: Relay Alpha (Even) & Beta (Odd)  │
-│  • /api/*    ➔ Real RTT latency probes & live byte counters            │
-└────────────┬───────────────────────────────────────────────────────────┘
-             │ Raw TCP Sockets (9009–9017)
-             ▼
-     Public Croc Relay Cluster (1.getcroc.com ... 4.getcroc.com)
-             ↕ (100% Wire Compatible)
-     Official Go croc CLI (Windows/macOS/Linux) & getcroc.com
+```text
++-------------------------------------------------------------------------+
+|                CrocFlow Client (React 19 + TypeScript)                  |
+|  Standard Mode: src/protocol/croc/*                                     |
+|  Enhanced Mode: src/protocol/enhanced/* (Folder Manifest, Resume Cache) |
++--------------------+---------------------------------+------------------+
+                     | WebSocket /ws                   | WebSocket /ws-dual
+                     v                                 v
++-------------------------------------------------------------------------+
+|                    Node.js Bridge Server (server.ts)                    |
+|  /ws                  Allowlisted WebSocket-to-TCP bridge (SSRF guard)  |
+|  /ws-dual             In-process Local Dual-Relay Lab (Alpha & Beta)    |
+|  /api/relays/status   Public relay list and local Alpha/Beta counters   |
+|  /api/relays/ping     TCP RTT probe (public) & local probe (alpha/beta) |
+|  /api/runtime-config  JSON runtime config for native shells             |
+|  /healthz             Plain-text health check                           |
++--------------------+----------------------------------------------------+
+                     | Raw TCP (ports 9009-9017)
+                     v
++-------------------------------------------------------------------------+
+|        Public Croc Relays (1.getcroc.com .. 4.getcroc.com)              |
+|        Wire-compatible with official Go croc CLI & getcroc.com          |
++-------------------------------------------------------------------------+
 ```
 
----
+Both transfer modes follow the active Relay Profile:
 
-## 🚀 Quick Start (Local Development)
+- **Public Croc Relays**: Connects through `/ws` on the Bridge Server to `1.getcroc.com`–`4.getcroc.com` over TCP ports `9009–9017`. In Enhanced Mode, Dual-Relay Transfer pairs deterministic relay indices `(alphaIdx, (alphaIdx + 1) % N)` via `connectRelay` and length-prefixed framing.
+- **Local Dual-Relay Lab**: Routes Enhanced Mode over `/ws-dual` into isolated in-memory rooms (`alpha` and `beta`) hosted by `LocalDualRelayNode` (`server/local-dual-relay.ts`) for deterministic Dual-Relay Transfer and Failover testing on restricted or offline LANs.
 
-### Prerequisites
-- **Node.js**: v20 LTS or v22 LTS (Download: [nodejs.org](https://nodejs.org))
-- **npm** or **pnpm**
+## Setup, Build, and Test
+
+Prerequisites: Node.js 20 LTS or 22 LTS and npm.
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/your-username/croc-gui-networkprogrammingcourse.git
+git clone https://github.com/<org>/croc-gui-networkprogrammingcourse.git
 cd croc-gui-networkprogrammingcourse
-
-# 2. Install dependencies
 npm install
-
-# 3. Launch unified development server
 npm run dev
 ```
 
-Visit **http://localhost:3000** in any browser. Mobile devices on the same Wi-Fi can open `http://<your-lan-ip>:3000`.
+`npm run dev` runs `tsx server.ts`, listening on `0.0.0.0:3000` with Vite middleware. Open `http://localhost:3000` locally or `http://<lan-ip>:3000` from another device on the same LAN.
 
----
-
-## 🧪 Testing & Verification
-
-CrocFlow maintains a strict automated test suite verifying protocol compliance, cryptographic correctness, SSRF allowlists, and multi-relay failover state machines:
+Verification and production commands from `package.json`:
 
 ```bash
-# Check TypeScript types without emitting files
-npm run lint
-
-# Run all unit and integration tests
-npm test
-
-# Build production bundle
-npm run build
+npm run lint   # TypeScript type check (tsc --noEmit)
+npm test       # Unit and integration tests (tsx --test "src/**/*.test.ts" "server/**/*.test.ts")
+npm run build  # Build static frontend bundle into dist/ (vite build)
+npm start      # Run production server (NODE_ENV=production tsx server.ts)
 ```
 
----
+## Security and Cryptography
 
-## 🔐 Security & Cryptography
+All key derivation, encryption, and decryption execute on the client using Web Crypto (`crypto.subtle`) and `@noble/curves`:
 
-All encryption and decryption occur strictly on the user's client machine:
+- **Standard Mode cryptography**: Implements SPAKE2 (PAKE v2 over NIST P-256 for peer key agreement; `siec` for relay room authorization), RFC 5869 HKDF-SHA-256 key derivation with bidirectional confirmation tags (`confirmationA`, `confirmationB`), AES-256-GCM with 12-byte IVs, and XXH64 checksums.
+- **Enhanced Mode cryptography**: Performs ephemeral ECDH (NIST P-256) combined with the Codephrase through HKDF-SHA-256 (`confirmSender`, `confirmReceiver`), encrypts each Chunk and control message with AES-256-GCM using a 12-byte random IV, and verifies SHA-256 digests per Chunk and per reassembled file.
+- **Bridge Server SSRF defense** (`server/bridge-allowlist.ts`): `/ws` resolves targets strictly by configured integer relay index and allowlisted ports (`9009–9017`). Loopback addresses, RFC 1918 private subnets, CGNAT (`100.64.0.0/10`), IPv6 link-local/ULA ranges, and cloud metadata endpoints (`169.254.169.254`) are rejected.
+- **Path traversal defense** (`src/protocol/enhanced/manifest.ts`): `sanitizeRelativePath` normalizes directory separators and rejects `..`, absolute paths, Windows drive letters, and ASCII control characters.
 
-1. **PAKE v2 Key Exchange (NIST P-256)**: Ephemeral elliptic curve keys are masked with the secret codephrase hash. Relay nodes cannot inspect the codephrase or decrypt payload streams.
-2. **HKDF-SHA-256 Key Derivation**: Derives independent 256-bit symmetric session keys along with bidirectional verification tags (`confirmA`, `confirmB`).
-3. **AES-256-GCM Authenticated Encryption**: Every chunk is encrypted with a unique 12-byte random initialization vector (IV). Any tampering in transit immediately triggers GCM authentication failure and terminates the session.
-4. **Anti-SSRF Security**: The backend WebSocket bridge enforces strict host allowlists, restricts port ranges (9009–9017), and blocks RFC 1918 private subnets, loopbacks, and cloud metadata IPs (`169.254.169.254`).
-5. **Path Traversal Defense**: All relative paths in folder manifests are normalized via `sanitizeRelativePath`, rejecting `..`, absolute paths, Windows drive letters, and control characters.
+## Deployment Targets
 
----
-
-## 📱 Cross-Platform Deployment
-
-| Target | Build Method | Details |
+| Target | Build / Entry | Notes |
 | :--- | :--- | :--- |
-| **Web PWA** | `npm run build` | Installable directly in Chrome, Edge, and Safari with offline Workbox caching. |
-| **Android APK** | `npx cap sync android` | Capacitor WebView wrapper around the same static web build (standard HTML file input; no camera QR scanner). It has no Bridge Server inside: run `server.ts` on a PC on the same LAN and enter its address (e.g. `http://192.168.1.10:3000`) under **Relays & Network → Bridge Server Address**. See [Setup Guide](docs/SETUP_AND_DEPLOY_EN.md). |
-| **Desktop App** | `packaging/desktop/` | Standalone Electron package embedding a background loopback Node bridge. |
-| **CI/CD** | `.github/workflows/build-releases.yml` | Automated GitHub Actions workflow building Web, APK, and Desktop artifacts. |
+| **Web PWA** | `npm run build` | Static bundle built with Vite and `vite-plugin-pwa` (Workbox caching), served by `server.ts`. |
+| **Android APK (Capacitor)** | `npx cap sync android` | Wraps static `dist/` in a Capacitor WebView (`androidScheme: "http"`, `cleartext: true` in `capacitor.config.ts`). It does not embed a Bridge Server: run `server.ts` on a PC in the same LAN and enter its URL (for example `http://192.168.1.10:3000`) under **Relays & Network -> Bridge Server Address**. |
+| **Desktop (Electron)** | `packaging/desktop/` | Bundles `server.ts` into `server.mjs` (`npm run bundle:server`) together with `dist/`, running an embedded Bridge Server on loopback. Package targets: `dist:win`, `dist:mac`, `dist:linux`. |
+| **CI/CD** | `.github/workflows/build-releases.yml` | Runs `npm run lint`, unit/integration tests, `npm run build`, Capacitor Android debug APK assembly, and Electron desktop builds. |
 
----
+## Documentation
 
-## 📚 Technical Documentation Index
+| Document | Description |
+| :--- | :--- |
+| [Architecture (EN)](docs/ARCHITECTURE_EN.md) / [(VI)](docs/ARCHITECTURE_VI.md) | Module boundaries, data flows, and state machines |
+| [Networking Guide (EN)](docs/NETWORKING_GUIDE_EN.md) / [(VI)](docs/NETWORKING_GUIDE_VI.md) | NAT traversal, WebSocket vs. TCP bridging, PAKE, and Failover |
+| [Setup and Deployment (EN)](docs/SETUP_AND_DEPLOY_EN.md) / [(VI)](docs/SETUP_AND_DEPLOY_VI.md) | Local development, Android APK setup, and `croc` CLI testing |
+| [Live Demo Guide (EN)](docs/DEMO_GUIDE_EN.md) / [(VI)](docs/DEMO_GUIDE_VI.md) | 5-minute evaluation walkthrough and verification scenarios |
+| [Dual-Relay Presentation & Study Guide (VI)](docs/DUAL_RELAY_PRESENTATION_VI.md) | Technical deep dive, bug analyses, demo script, and Q&A guide |
+| [Lecturer Demo Script (VI)](docs/LECTURER_DEMO_SCRIPT_VI.md) | Structured classroom presentation script |
+| [Domain Glossary](GLOSSARY.md) | Canonical EN/VI terminology and concept boundaries |
 
-Detailed bilingual documentation is available under `docs/`:
+Architecture Decision Records:
 
-- [**Live Demonstration & Technical Evaluation Guide (EN)**](docs/DEMO_GUIDE_EN.md) / [**(VI)**](docs/DEMO_GUIDE_VI.md) — 5-minute walkthrough, test commands, and reviewer Q&A.
-- [**Codebase Architecture & System Design (EN)**](docs/ARCHITECTURE_EN.md) / [**(VI)**](docs/ARCHITECTURE_VI.md) — Module boundaries, data flow diagrams, and state machines.
-- [**Computer Networking Fundamentals (EN)**](docs/NETWORKING_GUIDE_EN.md) / [**(VI)**](docs/NETWORKING_GUIDE_VI.md) — NAT traversal, WebSockets vs. TCP, PAKE cryptography, and failover.
-- [**Setup, Deployment & Packaging Guide (EN)**](docs/SETUP_AND_DEPLOY_EN.md) / [**(VI)**](docs/SETUP_AND_DEPLOY_VI.md) — Local development, Android APK build, and CLI testing.
-- [**Domain Vocabulary (GLOSSARY.md)**](GLOSSARY.md) — Canonical terminology and concept boundaries.
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+- [ADR 0001: Unified React + TypeScript Codebase over Fyne](docs/adr/0001-unified-react-ts-codebase-over-fyne.md)
+- [ADR 0002: Separate Standard Mode from Enhanced Mode](docs/adr/0002-dual-mode-interop-and-enhanced-protocol.md)
+- [ADR 0003: Unified Node.js Bridge Server and Local Dual-Relay Lab](docs/adr/0003-embedded-bridge-and-local-dual-relay.md)
+- [ADR 0004: Relay-Profile-Aware Dual-Relay Transport and Handshake](docs/adr/0004-enhanced-dual-relay-transport-and-handshake.md)
