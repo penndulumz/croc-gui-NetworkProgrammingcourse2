@@ -435,17 +435,20 @@ async function openLocalWsChannel(params: {
   const ws = params.wsFactory(url);
   ws.binaryType = "arraybuffer";
 
+  let isOpen = false;
   const conn: RelayChannelConnection = {
     lane: params.lane,
-    alive: false,
+    get alive() {
+      return isOpen && ws.readyState === 1;
+    },
     sendJson: (msg) => {
-      if (!conn.alive || ws.readyState !== 1) {
+      if (!conn.alive) {
         throw new Error(`Kênh Relay ${params.lane} đã ngắt kết nối`);
       }
       ws.send(JSON.stringify(msg));
     },
     close: () => {
-      conn.alive = false;
+      isOpen = false;
       try {
         ws.close(1000, "done");
       } catch {
@@ -463,7 +466,7 @@ async function openLocalWsChannel(params: {
 
     let settled = false;
     ws.onopen = () => {
-      conn.alive = true;
+      isOpen = true;
       if (!settled) {
         settled = true;
         params.signal?.removeEventListener("abort", onAbort);
@@ -471,11 +474,14 @@ async function openLocalWsChannel(params: {
       }
     };
     ws.onerror = () => {
-      conn.alive = false;
       if (!settled) {
+        isOpen = false;
         settled = true;
         params.signal?.removeEventListener("abort", onAbort);
         reject(new Error(`Không thể kết nối tới Relay ${params.lane}`));
+      } else if (isOpen) {
+        isOpen = false;
+        params.onClose(params.lane);
       }
     };
     ws.onmessage = (ev) => {
@@ -498,8 +504,8 @@ async function openLocalWsChannel(params: {
       }
     };
     ws.onclose = () => {
-      const wasOpen = settled && conn.alive;
-      conn.alive = false;
+      const wasOpen = settled && isOpen;
+      isOpen = false;
       if (wasOpen) {
         params.onClose(params.lane);
       }
@@ -758,9 +764,9 @@ async function openEnhancedChannels(params: {
   }
 
   let alphaConn: RelayChannelConnection | null =
-    alphaRes.status === "fulfilled" ? alphaRes.value : null;
+    alphaRes.status === "fulfilled" && alphaRes.value.alive ? alphaRes.value : null;
   let betaConn: RelayChannelConnection | null =
-    betaRes.status === "fulfilled" && betaRes.value ? betaRes.value : null;
+    betaRes.status === "fulfilled" && betaRes.value?.alive ? betaRes.value : null;
   let betaFallbackReason = fallbackReasonIfNoBeta;
 
   if (!alphaConn && !betaConn) {
@@ -775,10 +781,14 @@ async function openEnhancedChannels(params: {
         ? alphaRes.reason instanceof Error
           ? alphaRes.reason.message
           : String(alphaRes.reason)
-        : "Không mở được Relay Alpha — tự động dùng Relay Beta";
-  } else if (alphaConn && !betaConn && betaRes.status === "rejected") {
-    betaFallbackReason =
-      betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
+        : "Relay Alpha đóng kết nối sớm — tự động dùng Relay Beta";
+  } else if (alphaConn && !betaConn) {
+    if (betaRes.status === "rejected") {
+      betaFallbackReason =
+        betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
+    } else if (betaRes.status === "fulfilled" && betaRes.value && !betaRes.value.alive) {
+      betaFallbackReason = "Relay Beta đóng kết nối sớm — tự động dùng Relay Alpha";
+    }
   }
 
   const effectiveDualRelay = Boolean(params.dualRelay && alphaConn?.alive && betaConn?.alive);
@@ -909,6 +919,7 @@ export async function sendEnhancedTransfer(options: {
   const incoming = new AsyncMessageQueue<{ lane: RelayLane; msg: WirePlainMessage }>();
   let alphaConn: RelayChannelConnection | null = null;
   let betaConn: RelayChannelConnection | null = null;
+  let channelsAssigned = false;
   let scheduler: DualRelayScheduler | null = null;
   let effectiveDualRelay = dualRelay;
   let alphaAlive = true;
@@ -1075,6 +1086,10 @@ export async function sendEnhancedTransfer(options: {
         }
       }
 
+      if (!channelsAssigned) {
+        return;
+      }
+
       if (!alphaConn?.alive && !betaConn?.alive) {
         const err = new Error("Cả hai kênh Relay đều đã đóng");
         incoming.close(err);
@@ -1098,9 +1113,16 @@ export async function sendEnhancedTransfer(options: {
     });
     alphaConn = opened.alphaConn;
     betaConn = opened.betaConn;
+    channelsAssigned = true;
     effectiveDualRelay = opened.effectiveDualRelay;
     alphaAlive = Boolean(alphaConn?.alive);
     betaAlive = Boolean(betaConn?.alive);
+    if (!alphaConn?.alive && !betaConn?.alive) {
+      const err = new Error("Cả hai kênh Relay đều đã đóng");
+      incoming.close(err);
+      wakeWorkers(err);
+      throw err;
+    }
 
     onHandleReady?.({
       simulateAlphaDisconnect: () =>
@@ -1252,10 +1274,45 @@ export async function sendEnhancedTransfer(options: {
 
     // Chờ ResumePlan và kết quả thương lượng `activeLanes` / `dualRelayAccepted` từ máy nhận
     let singleLane: RelayLane = alphaAlive ? "alpha" : "beta";
+    const peerDroppedLanes = new Set<RelayLane>();
     while (true) {
       const next = await incoming.next();
       if (next.msg.type === "encrypted") {
         const decMsg = await decryptPayload(keys.aesKey, next.msg);
+        if (decMsg.kind === "lane-down") {
+          peerDroppedLanes.add(decMsg.lane);
+          const prevDual = effectiveDualRelay;
+          if (decMsg.lane === "alpha") {
+            alphaAlive = false;
+            alphaConn?.close();
+            alphaConn = null;
+          } else if (decMsg.lane === "beta") {
+            betaAlive = false;
+            betaConn?.close();
+            betaConn = null;
+          }
+          effectiveDualRelay = Boolean(alphaConn?.alive && betaConn?.alive);
+          singleLane = betaConn?.alive && !alphaConn?.alive ? "beta" : "alpha";
+          if (!alphaConn?.alive && !betaConn?.alive) {
+            throw new Error("Cả hai kênh Relay đều đã đóng");
+          }
+          if (prevDual && !effectiveDualRelay && emitInspector) {
+            protocolEventBus.logEvent({
+              kind: "relay",
+              mode: "enhanced",
+              relay: singleLane,
+              title:
+                singleLane === "beta"
+                  ? "Chuyển về 1 kênh Relay Beta (máy nhận mất Relay Alpha)"
+                  : "Chuyển về 1 kênh Relay Alpha (máy nhận mất Relay Beta)",
+              detail:
+                singleLane === "beta"
+                  ? "Máy nhận báo Relay Alpha ngắt kết nối trước ResumePlan — toàn bộ chunk sẽ đi qua Beta"
+                  : "Máy nhận báo Relay Beta ngắt kết nối trước ResumePlan — toàn bộ chunk sẽ đi qua Alpha",
+            });
+          }
+          continue;
+        }
         if (decMsg.kind === "resume-plan") {
           laneConfirmedPeer[next.lane] = true;
           missingIndices = decMsg.missingIndices;
@@ -1268,8 +1325,14 @@ export async function sendEnhancedTransfer(options: {
                 ? ["alpha"]
                 : ["alpha", "beta"];
 
-          const wantAlpha = Boolean(alphaConn?.alive) && receiverLanes.includes("alpha");
-          const wantBeta = Boolean(betaConn?.alive) && receiverLanes.includes("beta");
+          const wantAlpha =
+            Boolean(alphaConn?.alive) &&
+            !peerDroppedLanes.has("alpha") &&
+            receiverLanes.includes("alpha");
+          const wantBeta =
+            Boolean(betaConn?.alive) &&
+            !peerDroppedLanes.has("beta") &&
+            receiverLanes.includes("beta");
 
           if (wantAlpha || wantBeta) {
             if (!wantAlpha && alphaConn) {
@@ -1301,6 +1364,8 @@ export async function sendEnhancedTransfer(options: {
                     : "Máy nhận chỉ bật Relay Alpha — toàn bộ chunk sẽ đi qua Alpha",
               });
             }
+          } else {
+            throw new Error("Không còn kênh Relay chung khả dụng giữa máy gửi và máy nhận");
           }
 
           if (emitInspector && skippedCount > 0) {
@@ -1675,6 +1740,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   const incoming = new AsyncMessageQueue<{ lane: RelayLane; msg: WirePlainMessage }>();
   let alphaConn: RelayChannelConnection | null = null;
   let betaConn: RelayChannelConnection | null = null;
+  let channelsAssigned = false;
   let alphaAlive = false;
   let betaAlive = false;
   let sessionKeys: {
@@ -1684,6 +1750,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   } | null = null;
   let transferComplete = false;
   let gotPakeReply = false;
+  const pendingLaneDownNotifications = new Set<Promise<void>>();
   let sendPakeInitFn: (() => void) | null = null;
   let cancelPakeRetry: (() => void) | undefined;
   let cancelConfirmRetry: (() => void) | undefined;
@@ -1732,6 +1799,10 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       if (closedLane === "alpha") alphaAlive = false;
       else betaAlive = false;
 
+      if (!channelsAssigned) {
+        return;
+      }
+
       if (!alphaConn?.alive && !betaConn?.alive) {
         incoming.close(new Error("Cả hai kênh Relay đã đóng kết nối"));
         return;
@@ -1742,14 +1813,18 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       if (sessionKeys && !transferComplete && !controller.signal.aborted) {
         const surviving = closedLane === "alpha" ? betaConn : alphaConn;
         if (surviving?.alive) {
-          void encryptPayload(sessionKeys.aesKey, {
+          const laneDownPromise = encryptPayload(sessionKeys.aesKey, {
             kind: "lane-down",
             lane: closedLane,
           })
             .then((frame) => {
               if (surviving.alive) surviving.sendJson(frame);
             })
-            .catch(() => undefined);
+            .catch(() => undefined)
+            .finally(() => {
+              pendingLaneDownNotifications.delete(laneDownPromise);
+            });
+          pendingLaneDownNotifications.add(laneDownPromise);
         }
       }
     };
@@ -1771,9 +1846,15 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     });
     alphaConn = opened.alphaConn;
     betaConn = opened.betaConn;
+    channelsAssigned = true;
     let effectiveDualRelay = opened.effectiveDualRelay;
     alphaAlive = Boolean(alphaConn?.alive);
     betaAlive = Boolean(betaConn?.alive);
+    if (!alphaConn?.alive && !betaConn?.alive) {
+      const err = new Error("Cả hai kênh Relay đã đóng kết nối");
+      incoming.close(err);
+      throw err;
+    }
 
     logEnhancedChannelOpened({
       emitInspector,
@@ -1945,32 +2026,36 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
 
     // Thương lượng chính xác tập lane khả dụng hai đầu (`activeLanes`) tại ranh giới `manifest` -> `resume-plan`:
     // bảo đảm chỉ bật Dual-Relay khi CẢ Alpha và Beta đều sống ở cả hai đầu, và giữ nguyên lane sống
-    // (dù là Alpha hay Beta) khi một trong hai kênh gặp sự cố trong lúc bắt tay.
+    // (dù là Alpha hay Beta) khi một trong hai kênh gặp sự cố trong lúc bắt tay hoặc khi người dùng xác nhận.
     const advertisedSenderLanes: RelayLane[] =
       Array.isArray(senderLanes) && senderLanes.length > 0
         ? senderLanes
         : senderDualRelay
           ? ["alpha", "beta"]
           : ["alpha"];
-    const receiverAliveLanes: RelayLane[] = [];
-    if (alphaConn?.alive) receiverAliveLanes.push("alpha");
-    if (betaConn?.alive) receiverAliveLanes.push("beta");
-    const commonLanes = receiverAliveLanes.filter((l) => advertisedSenderLanes.includes(l));
-    const activeLanes: RelayLane[] =
-      commonLanes.length > 0 ? commonLanes : receiverAliveLanes;
+    const reconcileLanes = () => {
+      const receiverAliveLanes: RelayLane[] = [];
+      if (alphaConn?.alive) receiverAliveLanes.push("alpha");
+      if (betaConn?.alive) receiverAliveLanes.push("beta");
+      const commonLanes = receiverAliveLanes.filter((l) => advertisedSenderLanes.includes(l));
+      const lanes: RelayLane[] =
+        commonLanes.length > 0 ? commonLanes : receiverAliveLanes;
 
-    if (!activeLanes.includes("alpha") && alphaConn) {
-      alphaAlive = false;
-      alphaConn.close();
-      alphaConn = null;
-    }
-    if (!activeLanes.includes("beta") && betaConn) {
-      betaAlive = false;
-      betaConn.close();
-      betaConn = null;
-    }
-    const negotiatedDual = activeLanes.includes("alpha") && activeLanes.includes("beta");
-    effectiveDualRelay = negotiatedDual;
+      if (!lanes.includes("alpha") && alphaConn) {
+        alphaAlive = false;
+        alphaConn.close();
+        alphaConn = null;
+      }
+      if (!lanes.includes("beta") && betaConn) {
+        betaAlive = false;
+        betaConn.close();
+        betaConn = null;
+      }
+      const dual = lanes.includes("alpha") && lanes.includes("beta");
+      effectiveDualRelay = dual;
+      return { activeLanes: lanes, negotiatedDual: dual };
+    };
+    reconcileLanes();
 
     if (emitInspector) {
       protocolEventBus.initChunks(manifest.totalChunks, manifest.totalBytes);
@@ -2009,6 +2094,14 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     const missingIndices = manifest.chunks
       .filter((c) => !chunkBuffers.has(c.globalIndex))
       .map((c) => c.globalIndex);
+
+    if (pendingLaneDownNotifications.size > 0) {
+      await Promise.allSettled([...pendingLaneDownNotifications]);
+    }
+    const { activeLanes, negotiatedDual } = reconcileLanes();
+    if (activeLanes.length === 0) {
+      throw new Error("Cả hai kênh Relay đã đóng kết nối");
+    }
 
     broadcastControlMsg(
       await encryptPayload(keys.aesKey, {

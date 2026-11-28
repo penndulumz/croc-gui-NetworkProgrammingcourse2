@@ -1033,16 +1033,64 @@ test("Enhanced Dual-Relay negotiates down to Beta when Receiver Alpha dies durin
     const files = makeTestFiles(false);
     const { adapter } = createMemoryCache();
 
+    let resolveAlphaClosed: (() => void) | null = null;
+    const alphaClosedPromise = new Promise<void>((res) => {
+      resolveAlphaClosed = res;
+    });
+
     const recvDropAlphaWsFactory = (url: string): WebSocketLike => {
       const ws = nodeWsFactory(url);
       if (url.includes("channel=alpha") && url.includes("role=receiver")) {
+        let dropping = false;
         const rawWs = ws as unknown as WebSocket;
-        rawWs.once("open", () => {
-          setTimeout(() => {
+        rawWs.once("close", () => {
+          resolveAlphaClosed?.();
+        });
+        const origSend = ws.send.bind(ws);
+        ws.send = (data) => {
+          if (typeof data === "string" && data.includes('"type":"pake-init"')) {
+            dropping = true;
             try {
               ws.close(4003, "Receiver Alpha dropped during PAKE");
             } catch {}
-          }, 25);
+            return;
+          }
+          origSend(data);
+        };
+        const protoDesc =
+          Object.getOwnPropertyDescriptor(ws, "onmessage") ??
+          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ws), "onmessage");
+        let wrappedHandler: ((ev: { data: unknown }) => void) | null = null;
+        Object.defineProperty(ws, "onmessage", {
+          configurable: true,
+          get: () => wrappedHandler,
+          set: (fn) => {
+            wrappedHandler = (ev: { data: unknown }) => {
+              if (dropping) return;
+              fn?.(ev);
+            };
+            protoDesc?.set?.call(ws, wrappedHandler);
+          },
+        });
+      } else if (url.includes("channel=beta") && url.includes("role=receiver")) {
+        const protoDesc =
+          Object.getOwnPropertyDescriptor(ws, "onmessage") ??
+          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ws), "onmessage");
+        let wrappedHandler: ((ev: { data: unknown }) => void) | null = null;
+        Object.defineProperty(ws, "onmessage", {
+          configurable: true,
+          get: () => wrappedHandler,
+          set: (fn) => {
+            wrappedHandler = (ev: { data: unknown }) => {
+              const txt = typeof ev.data === "string" ? ev.data : "";
+              if (txt.includes('"type":"pake-reply"')) {
+                void alphaClosedPromise.then(() => fn?.(ev));
+                return;
+              }
+              fn?.(ev);
+            };
+            protoDesc?.set?.call(ws, wrappedHandler);
+          },
         });
       }
       return ws;
@@ -1210,4 +1258,262 @@ test("Enhanced Dual-Relay with relayProfile='public' falls back to Beta when Alp
   assert.equal(sendRes.betaDelivered, 7);
   assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
   assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+});
+
+test("Enhanced Dual-Relay survives when Sender Alpha opens and drops while Sender Beta is still connecting", async () => {
+  const { fakeConnectRelay } = createVirtualCrocConnector();
+  const files = makeTestFiles(false);
+  const { adapter } = createMemoryCache();
+  const publicSettings = {
+    bridgeURL: "ws://unused/ws",
+    relayAddresses: ["1.getcroc.com:9009", "2.getcroc.com:9009", "3.getcroc.com:9009", "4.getcroc.com:9009"],
+    relayPassword: "pass123",
+  };
+
+  const senderAlphaDropsWhileBetaDials = async (
+    settings: unknown,
+    room: string,
+    port: string,
+    relayIndex: number,
+  ) => {
+    if (room.endsWith("-alpha")) {
+      const res = await fakeConnectRelay(settings, room, port, relayIndex);
+      setTimeout(() => res.socket.close(), 15);
+      return res;
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    return fakeConnectRelay(settings, room, port, relayIndex);
+  };
+
+  const sendPromise = sendEnhancedTransfer({
+    files,
+    codephrase: "4281-sender-early-alpha-drop",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: senderAlphaDropsWhileBetaDials as never,
+    chunkSize: 16 * 1024,
+    emitInspector: false,
+  });
+
+  const recvPromise = receiveEnhancedTransfer({
+    codephrase: "4281-sender-early-alpha-drop",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: fakeConnectRelay as never,
+    cache: adapter,
+    emitInspector: false,
+  });
+
+  const [sendRes, recvRes] = await Promise.race([
+    Promise.all([sendPromise, recvPromise]),
+    new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("Sender early Alpha drop during dial timed out")), 3000),
+    ),
+  ]);
+
+  assert.equal(sendRes.alphaDelivered, 0);
+  assert.equal(sendRes.betaDelivered, 7);
+  assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+  assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+});
+
+test("Enhanced Dual-Relay survives when Receiver Alpha opens and drops while Receiver Beta is still connecting", async () => {
+  const { fakeConnectRelay } = createVirtualCrocConnector();
+  const files = makeTestFiles(false);
+  const { adapter } = createMemoryCache();
+  const publicSettings = {
+    bridgeURL: "ws://unused/ws",
+    relayAddresses: ["1.getcroc.com:9009", "2.getcroc.com:9009", "3.getcroc.com:9009", "4.getcroc.com:9009"],
+    relayPassword: "pass123",
+  };
+
+  const recvAlphaDropsWhileBetaDials = async (
+    settings: unknown,
+    room: string,
+    port: string,
+    relayIndex: number,
+  ) => {
+    if (room.endsWith("-alpha")) {
+      const res = await fakeConnectRelay(settings, room, port, relayIndex);
+      setTimeout(() => res.socket.close(), 15);
+      return res;
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    return fakeConnectRelay(settings, room, port, relayIndex);
+  };
+
+  const sendPromise = sendEnhancedTransfer({
+    files,
+    codephrase: "4281-recv-early-alpha-drop",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: fakeConnectRelay as never,
+    chunkSize: 16 * 1024,
+    emitInspector: false,
+  });
+
+  const recvPromise = receiveEnhancedTransfer({
+    codephrase: "4281-recv-early-alpha-drop",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: publicSettings,
+    publicConnectRelay: recvAlphaDropsWhileBetaDials as never,
+    cache: adapter,
+    emitInspector: false,
+  });
+
+  const [sendRes, recvRes] = await Promise.race([
+    Promise.all([sendPromise, recvPromise]),
+    new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("Receiver early Alpha drop during dial timed out")), 3000),
+    ),
+  ]);
+
+  assert.equal(sendRes.alphaDelivered, 0);
+  assert.equal(sendRes.betaDelivered, 7);
+  assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+  assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+});
+
+test("Enhanced Dual-Relay reconciles lane-down sent during onManifestOffer before resume-plan", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+    let recvAlphaWs: WebSocketLike | null = null;
+
+    const trackingRecvWsFactory = (url: string): WebSocketLike => {
+      const ws = nodeWsFactory(url);
+      if (url.includes("channel=alpha") && url.includes("role=receiver")) {
+        recvAlphaWs = ws;
+      }
+      return ws;
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-lane-down-before-resume-plan",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-lane-down-before-resume-plan",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: trackingRecvWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+      onManifestOffer: async () => {
+        if (recvAlphaWs) {
+          await new Promise<void>((resolve) => {
+            (recvAlphaWs as unknown as WebSocket).once("close", () => resolve());
+            recvAlphaWs!.close(4004, "Receiver Alpha died during manifest offer");
+          });
+        }
+        return true;
+      },
+    });
+    recvPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("lane-down before resume-plan stalled")), 1500),
+      ),
+    ]);
+
+    assert.equal(sendRes.alphaDelivered, 0);
+    assert.equal(sendRes.betaDelivered, 7);
+    assert.equal(sendRes.failoverRerouted, 0);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
+test("Enhanced Dual-Relay reconciles synchronous Alpha ws.close() in onManifestOffer before resume-plan", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+    let recvAlphaWs: WebSocketLike | null = null;
+
+    const trackingRecvWsFactory = (url: string): WebSocketLike => {
+      const ws = nodeWsFactory(url);
+      if (url.includes("channel=alpha") && url.includes("role=receiver")) {
+        recvAlphaWs = ws;
+      }
+      return ws;
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-sync-close-on-offer",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-sync-close-on-offer",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: trackingRecvWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+      onManifestOffer: async () => {
+        // Call close() synchronously without awaiting the async 'close' event (readyState === CLOSING)
+        recvAlphaWs?.close(4004, "Receiver Alpha closing synchronously during manifest offer");
+        return true;
+      },
+    });
+    recvPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Sync close in onManifestOffer stalled")), 1500),
+      ),
+    ]);
+
+    assert.equal(sendRes.alphaDelivered, 0);
+    assert.equal(sendRes.betaDelivered, 7);
+    assert.equal(sendRes.failoverRerouted, 0);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
 });
