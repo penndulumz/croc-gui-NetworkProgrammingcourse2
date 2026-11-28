@@ -20,8 +20,10 @@ CrocFlow được xây dựng trên nền tảng **React 19 + TypeScript + Tailw
 │    src/protocol/croc/*           src/protocol/enhanced/*               │
 │    PAKE v2 · AES-GCM · XXH64     ECDH · SHA-256 · IndexedDB · 2 Relay  │
 └────────────┬──────────────────────────────┬────────────────────────────┘
-             │ WebSocket /ws                │ WebSocket /ws-dual
+             │                              │
+             │   [Relay Profile: Public]    │ [Relay Profile: Local Lab]
              ▼                              ▼
+       WebSocket /ws                  WebSocket /ws-dual
 ┌────────────────────────────────────────────────────────────────────────┐
 │              Máy chủ Bridge Server Hợp Nhất (server.ts)                │
 │  • /ws       ➔ Cầu nối TCP allowlist (chống SSRF) tới Relay Croc       │
@@ -81,8 +83,10 @@ crocflow/
 │   │       └── resume-cache.ts # Bộ nhớ đệm Chunk lưu trữ trong IndexedDB
 │   └── event-bus.ts            # Kênh sự kiện phát dữ liệu tới Bảng soi giao thức
 ├── docs/                       # Tài liệu kỹ thuật chi tiết song ngữ
+│   ├── adr/                    # Các quyết định kiến trúc (ADR-0001..0004)
 │   ├── ARCHITECTURE_EN.md      # Tài liệu kiến trúc tiếng Anh
 │   ├── ARCHITECTURE_VI.md      # Tài liệu này (Tiếng Việt)
+│   ├── DUAL_RELAY_PRESENTATION_VI.md # Tài liệu chuyên sâu Dual-Relay & Thuyết trình
 │   ├── NETWORKING_GUIDE_EN.md  # Cẩm nang mạng máy tính tiếng Anh
 │   ├── NETWORKING_GUIDE_VI.md  # Cẩm nang mạng máy tính tiếng Việt
 │   ├── DEMO_GUIDE_EN.md        # Hướng dẫn demo & đánh giá tiếng Anh
@@ -116,10 +120,10 @@ crocflow/
   - Tính mã băm SHA-256 cho từng Chunk riêng biệt và cho từng tệp.
   - Sử dụng hàm `sanitizeRelativePath` chặn đứng rủi ro tấn công leo thư mục (`../`).
 - **Bộ Lập Lịch Truyền Song Song 2 Relay (`dual-relay-scheduler.ts`)**:
-  - Phân luồng điều phối gói tin:
+  - Phân luồng điều phối `Chunk`:
     - Chunk chẵn (`0, 2, 4, ...`) ➔ `Relay Alpha`
     - Chunk lẻ (`1, 3, 5, ...`) ➔ `Relay Beta`
-  - Giám sát tình trạng kết nối. Khi Relay Alpha mất kết nối, hàm `triggerAlphaFailover()` chuyển toàn bộ các Chunk chẵn chưa hoàn tất sang Relay Beta ngay lập tức.
+  - Giám sát tình trạng kết nối và `Failover` đối xứng hai chiều (`triggerAlphaFailover()` và `triggerBetaFailover()` qua `triggerLaneFailover()`): khi một trong hai Relay mất kết nối, toàn bộ các `Chunk` chưa `"delivered"` được chuyển tức thời sang Relay còn sống.
 - **Bộ Nhớ Đệm Khôi Phục IndexedDB (`resume-cache.ts`)**:
   - Lưu trữ các Chunk đã xác thực trong cơ sở dữ liệu `crocflow-resume-db` của trình duyệt.
   - Khi có mạng trở lại, hàm `computeResumePlan()` đối chiếu Manifest với IndexedDB và chỉ tải những Chunk còn thiếu.
@@ -130,6 +134,15 @@ crocflow/
   - Trình duyệt kết nối WebSocket tới `server.ts` (`/ws?relay=0&port=9009`).
   - `server/bridge-allowlist.ts` kiểm tra danh sách trắng host/port và loại bỏ các dải IP nội bộ nhằm triệt tiêu hoàn toàn lỗ hổng SSRF.
   - Sau khi kiểm duyệt, server làm ống dẫn hai chiều chuyển tiếp các byte nhị phân giữa WebSocket và socket TCP tới Croc Relay.
+
+### 3.4. Kiến Trúc Dual-Relay Theo Relay Profile (ADR-0004)
+Theo [ADR-0004](./adr/0004-enhanced-dual-relay-transport-and-handshake.md), `Enhanced Mode` tách biệt lớp giao thức khỏi lớp truyền tải qua giao diện `RelayChannelConnection` trong [`enhanced-client.ts`](../src/protocol/enhanced/enhanced-client.ts):
+- **Định tuyến theo `Relay Profile`**:
+  - `Public Croc Relays` (`public`): Ghép cặp xác định `(alphaIndex, (alphaIndex + 1) % N)` qua `/ws` + `CrocSocket` (tự thu gọn về đơn kênh `Relay Alpha` nếu có ít hơn 2 `Relay Node` công cộng).
+  - `Local Dual-Relay Lab` (`local-lab` / `local-dual`): Kết nối qua `/ws-dual` tới `LocalDualRelayNode` (`server/local-dual-relay.ts`) với phòng Alpha/Beta cô lập và thông báo `peer_count`.
+- **Hội tụ bắt tay & Đàm phán**: Bên Nhận phát `pake-init` idempotent theo `peer_count >= 2` và chu kỳ `PAKE_INIT_RETRY_MS = 350` ms cho tới khi nhận `pake-reply`; hai đầu thống nhất `dualRelayAccepted` ngay trong `resume-plan` trước khi phát `Chunk`.
+- **Pipelining & Telemetry trung thực**: Giữ cửa sổ `MAX_IN_FLIGHT_PER_LANE = 4` với `chunkDelayMs = 0` trên trình duyệt, phát `lane-down` + `flush()` socket + `markRemainingDelivered()` khi `complete` đến sớm, và hiển thị RTT đo thật (`RTT: N/A` khi `null`, phân biệt `betaAlive === false` với `undefined`) trong `StreamInspectorDrawer.tsx`.
+- Xem phân tích đầy đủ và hướng dẫn trình bày chi tiết tại [DUAL_RELAY_PRESENTATION_VI.md](./DUAL_RELAY_PRESENTATION_VI.md).
 
 ---
 
