@@ -24,6 +24,7 @@ import {
 } from "../lib/relay-manager";
 import {
   clearBridgeOrigin,
+  configuredBridgeOrigin,
   loadSavedBridgeOrigin,
   needsBridgeOrigin,
   normalizeBridgeOrigin,
@@ -33,6 +34,7 @@ import {
 import { formatBytes } from "../lib/format";
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
+import { hasNativeDirectTcp } from "../protocol/croc/native-tcp";
 
 export interface RelaysViewProps {
   bridgeConfig: BridgePublicConfig | null;
@@ -50,7 +52,7 @@ function buildInitialNodes(
   locale: Locale = "vi",
 ): RelayNodeEntry[] {
   const isVi = locale === "vi";
-  const nodes: RelayNodeEntry[] = [
+  const nodes: RelayNodeEntry[] = hasNativeDirectTcp() ? [] : [
     {
       id: "local-alpha",
       name: isVi
@@ -131,6 +133,7 @@ export function RelaysView({
   locale = "vi",
 }: RelaysViewProps) {
   const t = getTranslations(locale);
+  const androidDirectTcp = hasNativeDirectTcp();
   const [customRelays, setCustomRelays] = useState<CustomRelayConfig[]>(() => loadCustomRelays());
   const [nodes, setNodes] = useState<RelayNodeEntry[]>(() =>
     buildInitialNodes(bridgeConfig, loadCustomRelays(), locale),
@@ -144,13 +147,16 @@ export function RelaysView({
   const [formError, setFormError] = useState<string | null>(null);
 
   const [savedOrigin, setSavedOrigin] = useState<string | null>(() => loadSavedBridgeOrigin());
-  const [originInput, setOriginInput] = useState<string>(() => loadSavedBridgeOrigin() ?? "");
+  const [originInput, setOriginInput] = useState<string>(
+    () => loadSavedBridgeOrigin() ?? configuredBridgeOrigin() ?? "",
+  );
   const [originTest, setOriginTest] = useState<{
     state: "idle" | "testing" | "ok" | "fail" | "invalid";
     detail?: string;
   }>({ state: "idle" });
   const missingOrigin = !savedOrigin && needsBridgeOrigin();
   const activeOrigin = savedOrigin ?? resolveBridgeOrigin();
+  const hasConfiguredOrigin = Boolean(savedOrigin ?? configuredBridgeOrigin());
 
   const handleSaveOrigin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +174,7 @@ export function RelaysView({
   const handleClearOrigin = () => {
     clearBridgeOrigin();
     setSavedOrigin(null);
-    setOriginInput("");
+    setOriginInput(configuredBridgeOrigin() ?? "");
     setOriginTest({ state: "idle" });
     onBridgeOriginChanged?.();
   };
@@ -316,7 +322,16 @@ export function RelaysView({
         </button>
       </div>
 
-      {/* Bridge Server origin (needed by the Android APK / static builds) */}
+      {androidDirectTcp && (
+        <section className="rounded-2xl border border-emerald-300/60 bg-emerald-50/70 p-4 text-xs text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-200">
+          {locale === "vi"
+            ? "APK Android kết nối TCP trực tiếp tới Croc Public Relays. Không cần Bridge Server; thiết bị gửi và nhận vẫn cần Internet và mạng phải cho phép TCP cổng 9009–9017."
+            : "The Android APK connects directly to public Croc relays over TCP. No Bridge Server is needed; both devices still need Internet, and the network must allow TCP ports 9009–9017."}
+        </section>
+      )}
+
+      {/* Bridge Server origin is retained for web, PWA, desktop and older APKs. */}
+      {!androidDirectTcp && (
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
         <div className="flex items-center gap-2">
           <Link2 className="h-4 w-4 text-zinc-500 dark:text-zinc-400" aria-hidden="true" />
@@ -333,7 +348,7 @@ export function RelaysView({
           </p>
         ) : (
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {savedOrigin ? t.relays.bridgeOriginActive : t.relays.bridgeOriginSameOrigin}
+            {hasConfiguredOrigin ? t.relays.bridgeOriginActive : t.relays.bridgeOriginSameOrigin}
             {activeOrigin && (
               <>
                 {": "}
@@ -411,6 +426,7 @@ export function RelaysView({
           </p>
         )}
       </section>
+      )}
 
       {/* Active Relay Profile Selector */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -443,11 +459,12 @@ export function RelaysView({
         <button
           type="button"
           onClick={() => onChangeRelayProfile("local-lab")}
+          disabled={androidDirectTcp}
           className={`flex items-start gap-3.5 rounded-2xl border p-4 text-left transition-all ${
             relayProfile === "local-dual" || relayProfile === "local-lab"
               ? "border-zinc-900 bg-zinc-50/80 shadow-xs ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800/60 dark:ring-zinc-100"
               : "border-zinc-200/80 bg-white hover:bg-zinc-50/60 dark:border-zinc-800/80 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/40"
-          }`}
+          } ${androidDirectTcp ? "cursor-not-allowed opacity-50" : ""}`}
         >
           <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors ${
             relayProfile === "local-dual" || relayProfile === "local-lab"
@@ -461,7 +478,11 @@ export function RelaysView({
               {t.relays.profileLocalLab}
             </div>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              {t.relays.profileLocalLabDesc}
+              {androidDirectTcp
+                ? locale === "vi"
+                  ? "Cần Bridge Server cục bộ; APK trực tiếp chỉ dùng Croc Public Relays."
+                  : "Requires a local Bridge Server; direct APK mode uses public Croc relays."
+                : t.relays.profileLocalLabDesc}
             </p>
           </div>
         </button>
@@ -624,6 +645,7 @@ export function RelaysView({
       </section>
 
       {/* Add Custom Relay Form */}
+      {!androidDirectTcp && (
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60">
         <h2 className="font-display text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           {t.relays.customModalTitle}
@@ -690,6 +712,7 @@ export function RelaysView({
           </p>
         )}
       </section>
+      )}
     </div>
   );
 }

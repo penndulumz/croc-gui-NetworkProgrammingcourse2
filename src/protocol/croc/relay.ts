@@ -10,6 +10,7 @@ import {
 import { CrocSocket } from "./transport";
 import type { CrocMessage, TransferSettings } from "./types";
 import { protocolEngine } from "./engine";
+import { hasNativeDirectTcp } from "./native-tcp";
 
 const CONTROL_PORT = "9009";
 const RELAY_PING = textEncoder.encode("ping");
@@ -67,6 +68,7 @@ export async function connectRelay(
       relayIndex,
       port,
       signal,
+      relayAddress(settings, relayIndex),
     );
     const pake = await engine.pakeInit(WEAK_RELAY_KEY, 0, "siec", signal);
     pakeHandle = pake.handle;
@@ -101,7 +103,9 @@ export async function connectRelay(
     if (signal?.aborted) throw error;
     if (error instanceof RelayConnectionError) throw error;
     throw new RelayConnectionError(
-      `Could not establish the croc relay connection: ${errorMessage(error)}`,
+      hasNativeDirectTcp()
+        ? `Could not connect directly to the Croc Relay: ${errorMessage(error)}. Check that this network allows outbound TCP ports 9009–9017.`
+        : `Could not establish the croc relay connection: ${errorMessage(error)}`,
       error,
     );
   } finally {
@@ -129,6 +133,7 @@ export async function measureRelayLatency(
       relayIndex,
       controlPort(address),
       controller.signal,
+      address,
     );
     await socket.send(RELAY_PING);
     const response = await socket.receive();

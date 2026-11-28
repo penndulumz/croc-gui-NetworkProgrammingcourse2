@@ -1,5 +1,6 @@
 import { FrameDecoder, encodeFrame } from "./framing";
 import { bridgeWsURL } from "../../lib/bridge-origin";
+import { connectNativeRelaySocket, hasNativeDirectTcp } from "./native-tcp";
 
 type Reader = {
   resolve(value: Uint8Array): void;
@@ -95,13 +96,22 @@ export class CrocSocket {
     relayIndex: number,
     port: string,
     signal?: AbortSignal,
+    relayAddress?: string,
   ) {
     return new Promise<CrocSocket>((resolve, reject) => {
       if (signal?.aborted) {
         reject(new DOMException("Transfer cancelled", "AbortError"));
         return;
       }
-      const socket = new WebSocket(bridgeForPort(bridge, relayIndex, port));
+      let socket: WebSocket;
+      try {
+        socket = hasNativeDirectTcp() && relayAddress
+          ? connectNativeRelaySocket(relayAddress, port)
+          : new WebSocket(bridgeForPort(bridge, relayIndex, port));
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
       const crocSocket = new CrocSocket(socket, signal);
       const onOpen = () => {
         cleanup();

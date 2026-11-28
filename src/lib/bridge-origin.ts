@@ -1,12 +1,10 @@
 /**
  * Bridge Server origin resolution.
  *
- * When the web app is served by `server.ts` (the default), every Bridge Server
- * call stays same-origin and URLs resolve exactly as before. When the app runs
- * from static assets with no Bridge Server behind it (the Capacitor Android
- * APK, or any static build), the user saves the origin of a CrocFlow Bridge
- * Server on the LAN (e.g. `http://192.168.1.10:3000`) and every HTTP and
- * WebSocket URL is built against that origin instead.
+ * A per-device origin override wins. Android/static builds can also bake in a
+ * public Bridge Server origin with VITE_CROCFLOW_BRIDGE_ORIGIN. Otherwise web
+ * builds keep using their own origin, and a native shell without either origin
+ * has no Bridge Server configured.
  */
 
 export const BRIDGE_ORIGIN_KEY = "crocflow-bridge-origin-v1";
@@ -27,6 +25,7 @@ export interface BridgeOriginEnv {
   storage?: BridgeOriginStorage | null;
   location?: BridgeLocation | null;
   native?: boolean;
+  defaultOrigin?: string | null;
 }
 
 interface CapacitorLike {
@@ -140,17 +139,27 @@ function resolveEnv(env: BridgeOriginEnv = {}) {
   const storage = env.storage !== undefined ? env.storage : defaultStorage();
   const location = env.location !== undefined ? env.location : defaultLocation();
   const native = env.native ?? isNativeShell();
-  return { saved: loadSavedBridgeOrigin(storage), location, native };
+  const saved = loadSavedBridgeOrigin(storage);
+  const buildDefault = normalizeBridgeOrigin(
+    env.defaultOrigin !== undefined
+      ? env.defaultOrigin
+      : import.meta.env?.VITE_CROCFLOW_BRIDGE_ORIGIN,
+  );
+  return { saved, buildDefault, configured: saved ?? buildDefault, location, native };
+}
+
+/** Returns a per-device override or the public Bridge Server baked into this build. */
+export function configuredBridgeOrigin(env?: BridgeOriginEnv): string | null {
+  return resolveEnv(env).configured;
 }
 
 /**
- * Resolves the Bridge Server origin: the saved value if present, otherwise the
- * page's own origin when it is a normal http(s) page served by the Bridge
- * Server. Returns null inside a native shell with nothing saved.
+ * Resolves the Bridge Server origin: device override, build default, then the
+ * page's own origin for normal web pages. Returns null in an unconfigured shell.
  */
 export function resolveBridgeOrigin(env?: BridgeOriginEnv): string | null {
-  const { saved, location, native } = resolveEnv(env);
-  if (saved) return saved;
+  const { configured, location, native } = resolveEnv(env);
+  if (configured) return configured;
   if (native || !location) return null;
   if (location.protocol !== "http:" && location.protocol !== "https:") return null;
   return location.origin ?? `${location.protocol}//${location.host}`;
@@ -158,28 +167,28 @@ export function resolveBridgeOrigin(env?: BridgeOriginEnv): string | null {
 
 /** True when running natively with no Bridge Server origin configured. */
 export function needsBridgeOrigin(env?: BridgeOriginEnv): boolean {
-  const { saved, native } = resolveEnv(env);
-  return native && !saved;
+  const { configured, native } = resolveEnv(env);
+  return native && !configured;
 }
 
 /**
- * Builds an HTTP URL for a Bridge Server path. With no saved origin the path
- * stays relative (same-origin), exactly as the web app always resolved it.
+ * Builds an HTTP URL for a Bridge Server path. Without an explicit/default
+ * origin the path stays relative, preserving same-origin web behavior.
  */
 export function bridgeHttpURL(path: string, env?: BridgeOriginEnv): string {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const { saved } = resolveEnv(env);
-  return saved ? `${saved}${cleanPath}` : cleanPath;
+  const { configured } = resolveEnv(env);
+  return configured ? `${configured}${cleanPath}` : cleanPath;
 }
 
 /**
  * Builds a ws:// or wss:// URL for a Bridge Server path (`/ws`, `/ws-dual`).
- * With no saved origin it derives from the page location, exactly as before.
+ * Without an explicit/default origin it derives from the page location.
  */
 export function bridgeWsURL(path: string, env?: BridgeOriginEnv): string {
-  const { saved, location } = resolveEnv(env);
-  if (saved) {
-    const url = new URL(saved);
+  const { configured, location } = resolveEnv(env);
+  if (configured) {
+    const url = new URL(configured);
     return deriveBridgeURL(url.protocol, url.host, path);
   }
   return deriveBridgeURL(location?.protocol ?? "http:", location?.host ?? "localhost:3000", path);

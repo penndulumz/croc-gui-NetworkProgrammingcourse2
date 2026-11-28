@@ -1,4 +1,5 @@
 import { bridgeHttpURL, bridgeWsURL, deriveBridgeURL } from "./bridge-origin";
+import { hasNativeDirectTcp, probeNativeRelay } from "../protocol/croc/native-tcp";
 
 export type RelayProfileMode = "public" | "local-lab" | "local-dual";
 
@@ -89,6 +90,20 @@ export async function probePublicRelays(
   relayAddresses: string[],
 ): Promise<Record<string, number | null>> {
   const latencies: Record<string, number | null> = {};
+  if (hasNativeDirectTcp()) {
+    await Promise.all(relayAddresses.map(async (address, index) => {
+      try {
+        const rttMs = await probeNativeRelay(address);
+        latencies[address] = rttMs;
+        latencies[extractRelayHost(address)] = rttMs;
+        latencies[String(index)] = rttMs;
+      } catch {
+        latencies[address] = null;
+      }
+    }));
+    saveRelayLatencies(latencies);
+    return latencies;
+  }
   await Promise.all(
     relayAddresses.map(async (addr, idx) => {
       try {
@@ -295,6 +310,17 @@ export async function pingRelayNode(node: RelayNodeEntry): Promise<{
   }
 
   if (node.kind === "public" && typeof node.publicIndex === "number") {
+    if (hasNativeDirectTcp()) {
+      try {
+        return { ok: true, rttMs: await probeNativeRelay(node.address) };
+      } catch (error) {
+        return {
+          ok: false,
+          rttMs: null,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
     const res = await fetch(bridgeHttpURL(`/api/relays/ping?target=public&index=${node.publicIndex}`), {
       cache: "no-store",
     });

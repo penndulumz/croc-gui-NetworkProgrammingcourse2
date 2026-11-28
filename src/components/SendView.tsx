@@ -30,8 +30,9 @@ import {
   type EnhancedControlHandle,
   type EnhancedProgress,
 } from "../protocol/enhanced/enhanced-client";
-import type { BridgePublicConfig } from "../lib/bridge-client";
+import { publicRelayUnavailableMessage, type BridgePublicConfig } from "../lib/bridge-client";
 import { bridgeWsURL, shareLinkOrigin } from "../lib/bridge-origin";
+import { hasNativeDirectTcp } from "../protocol/croc/native-tcp";
 import {
   appendTransferHistory,
   loadPeerPresets,
@@ -158,6 +159,12 @@ export function SendView({
         codeGenSeqRef.current !== seq || busyRef.current || userEditedCodeRef.current;
 
       const relayAddresses = bridgeConfig?.relayAddresses ?? [];
+      if (hasNativeDirectTcp() && !isLocalLabProfile(relayProfile)) {
+        if (isStale()) return;
+        setOptimizedRelay(null);
+        setCodephrase(generateCode());
+        return;
+      }
       const shouldOptimizePublic =
         !isLocalLabProfile(relayProfile) &&
         relayAddresses.length > 0 &&
@@ -364,7 +371,7 @@ export function SendView({
         }
       }
       if (!bridgeConfig || bridgeConfig.relayAddresses.length === 0) {
-        setErrorText("Bridge Server chưa sẵn sàng danh sách Relay Croc công cộng.");
+        setErrorText(publicRelayUnavailableMessage(locale));
         return;
       }
 
@@ -450,6 +457,7 @@ export function SendView({
         relayProfile,
         bridgeConfig,
         latencies: loadRelayLatencies(),
+        locale,
       });
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : String(err));

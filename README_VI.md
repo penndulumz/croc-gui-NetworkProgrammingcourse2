@@ -84,7 +84,7 @@ Toàn bộ quá trình dẫn xuất khóa, mã hóa và giải mã chạy tại 
 | Nền tảng | Lệnh / Thư mục | Chi tiết triển khai |
 | :--- | :--- | :--- |
 | **Web PWA** | `npm run build` | Bản build tĩnh tạo bởi Vite và `vite-plugin-pwa` (lưu đệm Workbox), được phục vụ qua `server.ts`. |
-| **Android APK (Capacitor)** | `npx cap sync android` | Đóng gói thư mục tĩnh `dist/` trong Capacitor WebView (`androidScheme: "http"`, `cleartext: true` trong `capacitor.config.ts`). APK không tích hợp sẵn Máy Chủ Cầu Nối: cần chạy `server.ts` trên một máy tính cùng mạng LAN và nhập địa chỉ (ví dụ `http://192.168.1.10:3000`) tại **Relay & Mạng -> Địa chỉ Bridge Server**. |
+| **Android APK (Capacitor)** | `npx cap sync android` | Đóng gói giao diện trong Capacitor WebView và transport TCP native để kết nối trực tiếp tới Croc Relay công cộng. Hồ sơ Public không cần Bridge Server CrocFlow; Web/PWA và Desktop vẫn dùng Bridge Server. |
 | **Desktop (Electron)** | `packaging/desktop/` | Đóng gói `server.ts` thành `server.mjs` (`npm run bundle:server`) cùng với `dist/`, chạy Máy Chủ Cầu Nối tích hợp trên loopback. Các mục tiêu đóng gói: `dist:win`, `dist:mac`, `dist:linux`. |
 | **CI/CD** | `.github/workflows/build-releases.yml` | Tự động chạy `npm run lint`, bộ kiểm thử, `npm run build`, đóng gói Android debug APK bằng Capacitor và build ứng dụng Electron Desktop. |
 
@@ -106,3 +106,4 @@ Hồ sơ quyết định kiến trúc (ADR):
 - [ADR 0002: Tách biệt Chế Độ Chuẩn và Chế Độ Nâng Cao](docs/adr/0002-dual-mode-interop-and-enhanced-protocol.md)
 - [ADR 0003: Máy Chủ Cầu Nối Node.js hợp nhất và Phòng Lab 2 Relay cục bộ](docs/adr/0003-embedded-bridge-and-local-dual-relay.md)
 - [ADR 0004: Truyền Tải Dual-Relay Theo Hồ Sơ Relay và Bắt Tay Ổn Định](docs/adr/0004-enhanced-dual-relay-transport-and-handshake.md)
+- [ADR 0005: Kết Nối Android Trực Tiếp tới Croc Relay Công Cộng](docs/adr/0005-android-direct-public-relay-transport.md)

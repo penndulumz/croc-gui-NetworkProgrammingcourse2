@@ -5,10 +5,10 @@ const config: CapacitorConfig = {
   appName: "CrocFlow",
   webDir: "dist",
   server: {
-    // The APK ships only static `dist/`; the user points it at a CrocFlow Bridge
-    // Server on the LAN (Relays & Network view), typically plain
-    // `http://192.168.x.y:3000` + `ws://.../ws` because LAN machines rarely have
-    // TLS certificates.
+    // Keep localhost on a secure context for Web Crypto, IndexedDB and service
+    // workers. The current Android APK uses its native TCP transport for public
+    // Croc relays; http://localhost also retains compatibility with older APKs
+    // and optional LAN Bridge Server connections.
     //
     // Trade-off: with `androidScheme: "https"` the page origin is
     // `https://localhost`, and the WebView blocks every `http://` / `ws://`
@@ -21,10 +21,8 @@ const config: CapacitorConfig = {
     // working. Cost: the origin changes from https://localhost, so data saved
     // under the old origin (localStorage / IndexedDB) is not carried over.
     androidScheme: "http",
-    // Android 9+ blocks cleartext HTTP at the OS level unless the app opts in
-    // (android:usesCleartextTraffic); the WebView honours it. Needed to reach a
-    // LAN Bridge Server over http:// / ws://. A Bridge Server behind https/wss
-    // works without it.
+    // Retain cleartext compatibility for optional LAN Bridge Server connections
+    // and older APK builds. Direct TCP relay sockets do not use HTTP or WebSocket.
     cleartext: true,
   },
   android: {

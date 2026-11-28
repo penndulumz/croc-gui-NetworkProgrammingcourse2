@@ -35,7 +35,7 @@ import {
   getResumeCacheSummary,
   type ResumeCacheSummary,
 } from "../protocol/enhanced/resume-cache";
-import type { BridgePublicConfig } from "../lib/bridge-client";
+import { publicRelayUnavailableMessage, type BridgePublicConfig } from "../lib/bridge-client";
 import { bridgeWsURL } from "../lib/bridge-origin";
 import { isCodephrase } from "../protocol/croc/codephrase";
 import { appendTransferHistory } from "../lib/history-store";
@@ -424,7 +424,7 @@ export function ReceiveView({
 
     if (mode === "standard") {
       if (!bridgeConfig || bridgeConfig.relayAddresses.length === 0) {
-        setErrorText("Bridge Server chưa sẵn sàng danh sách Relay công cộng.");
+        setErrorText(publicRelayUnavailableMessage(locale));
         setBusy(false);
         return;
       }
@@ -511,6 +511,7 @@ export function ReceiveView({
         relayProfile,
         bridgeConfig,
         latencies: loadRelayLatencies(),
+        locale,
       });
       // Nạp cặp RTT Alpha/Beta đã đo/phân giải để truyền xuống StreamInspectorDrawer khi hiển thị.
       setStreamPairRtts(relayContext.streamPairRtts);

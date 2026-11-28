@@ -13,11 +13,13 @@ import { clearResumeCache, loadVerifiedChunkMap, saveVerifiedChunk } from "./res
 import { protocolEventBus } from "../event-bus";
 import { calculateManifestFileProgress, type FileProgress } from "../../lib/metrics";
 import { bridgeWsURL } from "../../lib/bridge-origin";
+import { publicRelayUnavailableMessage } from "../../lib/bridge-client";
 import { relayIndex } from "../croc/codephrase";
 import { randomBytes } from "../croc/bytes";
 import { confirmPeerKey, derivePeerKeys } from "../croc/key";
 import { Pake } from "../croc/pake";
 import { connectRelay, controlPort } from "../croc/relay";
+import { hasNativeDirectTcp } from "../croc/native-tcp";
 import type { CrocSocket } from "../croc/transport";
 import {
   extractRelayHost,
@@ -383,11 +385,12 @@ export async function prepareEnhancedRelayContext(params: {
   relayProfile: RelayProfileMode;
   bridgeConfig: { relayAddresses: string[]; relayPassword: string } | null;
   latencies: Record<string, number | null>;
+  locale?: "vi" | "en";
 }): Promise<{
   publicRelaySettings?: PublicRelaySettings;
   streamPairRtts: { alphaRttMs: number | null; betaRttMs: number | null };
 }> {
-  const { codephrase, relayProfile, bridgeConfig, latencies } = params;
+  const { codephrase, relayProfile, bridgeConfig, latencies, locale = "vi" } = params;
   const normalizedCode = codephrase.trim();
   if (isLocalLabProfile(relayProfile)) {
     return {
@@ -395,7 +398,7 @@ export async function prepareEnhancedRelayContext(params: {
     };
   }
   if (!bridgeConfig || bridgeConfig.relayAddresses.length === 0) {
-    throw new Error("Bridge Server chưa sẵn sàng danh sách Relay Croc công cộng.");
+    throw new Error(publicRelayUnavailableMessage(locale));
   }
   const plan = await resolvePublicDualRelayPlan(normalizedCode, bridgeConfig.relayAddresses);
   return {
@@ -702,6 +705,11 @@ async function openEnhancedChannels(params: {
     }).catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") throw err;
       const reason = err instanceof Error ? err.message : String(err);
+      if (hasNativeDirectTcp()) {
+        throw new Error(
+          `Không thể kết nối trực tiếp tới Public Croc Relay (${plan.alphaHost}:${plan.alphaPort}): ${reason}. APK cần mạng cho phép kết nối TCP đi ra cổng 9009–9017.`,
+        );
+      }
       throw new Error(
         `Không thể kết nối Public Croc Relay (${plan.alphaHost}:${plan.alphaPort}): ${reason}. Nếu mạng chặn cổng TCP 9009–9017, hãy đổi Hồ sơ Relay sang 'Local Dual-Relay Lab'.`,
       );

@@ -43,9 +43,9 @@ CrocFlow is a cross-platform, end-to-end encrypted file, folder, and text transf
 +-------------------------------------------------------------------------+
 ```
 
-Both transfer modes follow the active Relay Profile:
+Both transfer modes follow the active Relay Profile. The Capacitor Android APK has an isolated native TCP transport for the public profile; Web/PWA and Electron Desktop retain the Bridge Server architecture shown above.
 
-- **Public Croc Relays**: Connects through `/ws` on the Bridge Server to `1.getcroc.com`–`4.getcroc.com` over TCP ports `9009–9017`. In Enhanced Mode, Dual-Relay Transfer pairs deterministic relay indices `(alphaIdx, (alphaIdx + 1) % N)` via `connectRelay` and length-prefixed framing.
+- **Public Croc Relays**: Web/PWA and Desktop connect through `/ws` on the Bridge Server; the Android APK connects directly to `1.getcroc.com`–`4.getcroc.com`. Both use TCP ports `9009–9017`. In Enhanced Mode, Dual-Relay Transfer pairs deterministic relay indices `(alphaIdx, (alphaIdx + 1) % N)` via `connectRelay` and length-prefixed framing.
 - **Local Dual-Relay Lab**: Routes Enhanced Mode over `/ws-dual` into isolated in-memory rooms (`alpha` and `beta`) hosted by `LocalDualRelayNode` (`server/local-dual-relay.ts`) for deterministic Dual-Relay Transfer and Failover testing on restricted or offline LANs.
 
 ## Setup, Build, and Test
@@ -84,7 +84,7 @@ All key derivation, encryption, and decryption execute on the client using Web C
 | Target | Build / Entry | Notes |
 | :--- | :--- | :--- |
 | **Web PWA** | `npm run build` | Static bundle built with Vite and `vite-plugin-pwa` (Workbox caching), served by `server.ts`. |
-| **Android APK (Capacitor)** | `npx cap sync android` | Wraps static `dist/` in a Capacitor WebView (`androidScheme: "http"`, `cleartext: true` in `capacitor.config.ts`). It does not embed a Bridge Server: run `server.ts` on a PC in the same LAN and enter its URL (for example `http://192.168.1.10:3000`) under **Relays & Network -> Bridge Server Address**. |
+| **Android APK (Capacitor)** | `npx cap sync android` | Wraps the static UI in a Capacitor WebView and includes a native TCP transport for direct connections to official public Croc relays. No CrocFlow Bridge Server is required for the Public Croc Relays profile. Web/PWA and Desktop retain the Bridge Server. |
 | **Desktop (Electron)** | `packaging/desktop/` | Bundles `server.ts` into `server.mjs` (`npm run bundle:server`) together with `dist/`, running an embedded Bridge Server on loopback. Package targets: `dist:win`, `dist:mac`, `dist:linux`. |
 | **CI/CD** | `.github/workflows/build-releases.yml` | Runs `npm run lint`, unit/integration tests, `npm run build`, Capacitor Android debug APK assembly, and Electron desktop builds. |
 
@@ -106,3 +106,4 @@ Architecture Decision Records:
 - [ADR 0002: Separate Standard Mode from Enhanced Mode](docs/adr/0002-dual-mode-interop-and-enhanced-protocol.md)
 - [ADR 0003: Unified Node.js Bridge Server and Local Dual-Relay Lab](docs/adr/0003-embedded-bridge-and-local-dual-relay.md)
 - [ADR 0004: Relay-Profile-Aware Dual-Relay Transport and Handshake](docs/adr/0004-enhanced-dual-relay-transport-and-handshake.md)
+- [ADR 0005: Native Android Direct Transport to Public Croc Relays](docs/adr/0005-android-direct-public-relay-transport.md)

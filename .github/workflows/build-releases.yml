@@ -30,6 +30,8 @@ jobs:
             src/protocol/enhanced/dual-relay-scheduler.test.ts \
             src/protocol/enhanced/enhanced-transfer.test.ts
       - run: npm run build
+        env:
+          VITE_CROCFLOW_BRIDGE_ORIGIN: ${{ vars.CROCFLOW_BRIDGE_ORIGIN }}
       - uses: actions/upload-artifact@v4
         with:
           name: crocflow-web-pwa-dist
@@ -58,7 +60,8 @@ jobs:
         run: |
           npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
           npx cap add android
-          # Allow http:// / ws:// to a LAN Bridge Server (see capacitor.config.ts).
+          node scripts/prepare-android-native.mjs
+          # Retain HTTP compatibility for older APKs and optional LAN Bridge use.
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q 'usesCleartextTraffic' "$MANIFEST" || sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
           npx cap sync android

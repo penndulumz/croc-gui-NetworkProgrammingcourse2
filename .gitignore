@@ -2,6 +2,7 @@ node_modules/
 dist/
 dev-dist/
 build/
+/android/
 *.log
 .DS_Store
 Thumbs.db

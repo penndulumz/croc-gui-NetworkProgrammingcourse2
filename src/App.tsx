@@ -40,6 +40,7 @@ import {
   type Locale,
 } from "./lib/i18n";
 import type { NavDestinationId } from "./types/navigation";
+import { hasNativeDirectTcp } from "./protocol/croc/native-tcp";
 
 function readInitialQueryParams(): {
   nav: NavDestinationId;
@@ -77,7 +78,9 @@ export const App: React.FC = () => {
 
   const [bridgeHealthy, setBridgeHealthy] = useState<boolean | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatusResponse | null>(null);
-  const [relayProfile, setRelayProfile] = useState<RelayProfileMode>(() => loadRelayProfile());
+  const [relayProfile, setRelayProfile] = useState<RelayProfileMode>(() =>
+    hasNativeDirectTcp() ? "public" : loadRelayProfile(),
+  );
   const [deviceAlias, setDeviceAlias] = useState<string>(() => loadDeviceAlias());
   const [history, setHistory] = useState<TransferHistoryEntry[]>(() => loadTransferHistory());
 
@@ -150,6 +153,7 @@ export const App: React.FC = () => {
   };
 
   const handleChangeRelayProfile = (next: RelayProfileMode) => {
+    if (hasNativeDirectTcp() && next !== "public") return;
     setRelayProfile(next);
     saveRelayProfile(next);
   };

@@ -63,35 +63,35 @@ CrocFlow uses **Capacitor** (`capacitor.config.ts`) to package the exact same we
    ```bash
    npm run build
    ```
-2. Sync the web assets into the Android native project:
+2. Install the Capacitor packages (they are not default repo dependencies), then create the Android project (`android/` is generated and not committed):
    ```bash
+   npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+   npx cap add android
+   ```
+3. Install the native Android transport, then sync the web assets:
+   ```bash
+   node scripts/prepare-android-native.mjs
    npx cap sync android
    ```
-3. Open in Android Studio or build via Gradle:
+4. Open in Android Studio or build via Gradle:
    ```bash
    cd android
-   ./gradlew assembleDebug
+   .\gradlew.bat assembleDebug   # Windows PowerShell
+   # ./gradlew assembleDebug     # Linux/macOS
    ```
    The generated APK will be located at: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-#### Pointing the APK at a Bridge Server on your PC (required)
-The APK ships only the static web UI (`dist/`) and **contains no Bridge Server**. Calls to `/healthz`, `/api/*`, WebSocket `/ws` (Standard Croc v11) and `/ws-dual` (Local Dual-Relay Lab) must reach a machine running `server.ts`:
-1. On a computer on the same Wi-Fi/LAN as the phone, start the server (listens on `0.0.0.0:3000`):
-   ```bash
-   npm ci
-   npm run build
-   npm start          # or: npm run dev
-   ```
-   On Windows PowerShell use `$env:NODE_ENV="production"; npx tsx server.ts` instead of `npm start`.
-2. Find the computer's LAN IP (`ipconfig` on Windows, `ip addr` / `ifconfig` on Linux/macOS), e.g. `192.168.1.10`. Allow TCP port `3000` through the firewall.
-3. Open the APK → **Relays & Network** → **Bridge Server Address**, enter `http://192.168.1.10:3000`, press **Test** (calls `/healthz`), then **Save**. Until an address is saved the app shows an amber notice in that section.
-4. Press **Clear** to return to the default (the server that serves the page).
+#### Android direct connection to public relays
+The APK includes a small native Android TCP transport. In the **Public Croc Relays** profile it connects directly to the official Croc relay hosts, so no CrocFlow Bridge Server or user-supplied server address is required. Other Android, desktop, and official `croc` clients rendezvous through those same public relays using the existing Croc protocol.
+
+The GitHub Actions APK workflow runs the preparation script automatically. For a manual build, run it once after `npx cap add android` and before every `npx cap sync android` that regenerates the Android project.
 
 Technical notes:
-- With no saved address and the page served by `server.ts` (web/PWA/Desktop), every URL stays same-origin exactly as before.
-- `server.ts` enables narrow CORS only for `/healthz` and `/api/*`, only for the Capacitor WebView origins (`https://localhost`, `http://localhost`, `capacitor://localhost`). Runtime config is fetched from `GET /api/runtime-config` (same object as `/config.js`).
-- `capacitor.config.ts` uses `androidScheme: "http"` + `cleartext: true` so the WebView may call `http://` / `ws://` on the LAN (with `https` those are blocked as mixed content). The CI workflow adds `android:usesCleartextTraffic="true"` to `AndroidManifest.xml`; check that attribute if you build manually.
-- The public relay list and the allowlist/SSRF checks are still enforced by the Bridge Server on the PC (`CROC_RELAY_HOSTS`, `CROC_ALLOWED_PORTS`).
+- The native Android transport is isolated to the Capacitor APK. Web/PWA and Electron Desktop continue to use their existing Bridge Server paths.
+- Android direct mode uses the official public relay list and TCP ports `9009–9017`. Networks that block outbound connections to those ports can still prevent transfers; choosing another Internet connection may be necessary.
+- **Local Dual-Relay Lab** and custom relay entries still require a Bridge Server and are not available in Android direct mode.
+- The existing `server.ts` Bridge Server remains available for web, PWA, Desktop, and older APK builds.
+- The Android native bridge restricts socket destinations to the four official Croc relay hosts and ports `9009–9017`.
 
 ---
 

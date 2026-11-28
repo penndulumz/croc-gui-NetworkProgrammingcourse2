@@ -9,6 +9,10 @@ interface CrocRuntimeConfig {
 }
 
 declare global {
+  interface ImportMetaEnv {
+    readonly VITE_CROCFLOW_BRIDGE_ORIGIN?: string;
+  }
+
   interface Window {
     __CROC_RUNTIME_CONFIG__?: CrocRuntimeConfig;
   }

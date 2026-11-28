@@ -18,6 +18,7 @@ import type { ThemeMode } from "../lib/theme";
 import type { RelayProfileMode } from "../lib/relay-manager";
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
+import { hasNativeDirectTcp } from "../protocol/croc/native-tcp";
 
 const NAV_ICONS: Record<NavDestinationId, React.ComponentType<{ className?: string }>> = {
   send: ArrowUpFromLine,
@@ -63,6 +64,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const destinations = getNavDestinations(locale);
   const current = destinations.find((item) => item.id === activeNav) ?? destinations[0];
   const isLocalLab = relayProfile === "local-dual" || relayProfile === "local-lab";
+  const androidDirectTcp = hasNativeDirectTcp();
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500/20 selection:text-emerald-700 dark:selection:text-emerald-300">
@@ -144,7 +146,9 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             )}
             <p className="font-mono tabular-nums text-[11px] text-zinc-400 dark:text-zinc-500">
-              {bridgeHealthy === null
+              {androidDirectTcp
+                ? locale === "vi" ? "Android · TCP Relay trực tiếp" : "Android · Direct Relay TCP"
+                : bridgeHealthy === null
                 ? locale === "vi" ? "Đang kết nối bridge..." : "Connecting bridge..."
                 : bridgeHealthy
                   ? locale === "vi" ? "Bridge cục bộ · Cổng 3000" : "Local Bridge · Port 3000"

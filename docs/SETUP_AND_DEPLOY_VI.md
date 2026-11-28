@@ -63,35 +63,35 @@ CrocFlow sử dụng **Capacitor** (`capacitor.config.ts`) để đóng gói tr�
    ```bash
    npm run build
    ```
-2. Đồng bộ mã nguồn web vào thư mục dự án Android:
+2. Cài các gói Capacitor mà repo không khai báo làm dependency mặc định, rồi khởi tạo dự án Android (repo không lưu thư mục `android/`):
    ```bash
+   npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+   npx cap add android
+   ```
+3. Cài transport Android native, rồi đồng bộ mã nguồn web:
+   ```bash
+   node scripts/prepare-android-native.mjs
    npx cap sync android
    ```
-3. Mở trong Android Studio hoặc biên dịch bằng Gradle:
+4. Mở trong Android Studio hoặc biên dịch bằng Gradle:
    ```bash
    cd android
-   ./gradlew assembleDebug
+   .\gradlew.bat assembleDebug   # Windows PowerShell
+   # ./gradlew assembleDebug     # Linux/macOS
    ```
    Tệp APK tạo ra sẽ nằm tại: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-#### Kết nối APK với Bridge Server trên máy tính (bắt buộc)
-APK chỉ chứa giao diện web tĩnh (`dist/`), **không có Bridge Server bên trong**. Các lời gọi `/healthz`, `/api/*`, WebSocket `/ws` (Chuẩn Croc v11) và `/ws-dual` (Phòng Lab 2 Relay) phải đi tới một máy chạy `server.ts`:
-1. Trên máy tính cùng mạng Wi-Fi/LAN với điện thoại, chạy server (lắng nghe `0.0.0.0:3000`):
-   ```bash
-   npm ci
-   npm run build
-   npm start          # hoặc: npm run dev
-   ```
-   Trên Windows PowerShell dùng `$env:NODE_ENV="production"; npx tsx server.ts` thay cho `npm start`.
-2. Tìm địa chỉ IP LAN của máy tính (`ipconfig` trên Windows, `ip addr` / `ifconfig` trên Linux/macOS), ví dụ `192.168.1.10`. Cho phép cổng TCP `3000` qua tường lửa.
-3. Mở APK → **Relay & Mạng** → mục **Địa chỉ Bridge Server**, nhập `http://192.168.1.10:3000`, bấm **Kiểm tra** (gọi `/healthz`), rồi **Lưu**. Khi chưa cấu hình, ứng dụng hiển thị cảnh báo màu vàng ở mục này.
-4. Bấm **Xóa** để quay lại mặc định (dùng chính máy chủ phục vụ trang).
+#### Android kết nối trực tiếp tới Relay công cộng
+APK có một transport TCP native của Android. Khi chọn hồ sơ **Croc Public Relays**, APK kết nối trực tiếp tới các Relay Croc chính thức, không cần Bridge Server CrocFlow hay nhập địa chỉ máy chủ. Các APK Android khác, Desktop và ứng dụng `croc` chính thức vẫn gặp nhau qua cùng Relay công cộng và giao thức Croc hiện tại.
+
+Workflow APK trên GitHub Actions tự chạy script chuẩn bị này. Khi tự build, chạy script một lần sau `npx cap add android` và trước mỗi lần `npx cap sync android` có tạo lại dự án Android.
 
 Ghi chú kỹ thuật:
-- Khi không có địa chỉ đã lưu và trang được `server.ts` phục vụ (bản web/PWA/Desktop), mọi URL vẫn là same-origin như trước.
-- `server.ts` bật CORS hẹp chỉ cho `/healthz` và `/api/*`, chỉ với origin của WebView Capacitor (`https://localhost`, `http://localhost`, `capacitor://localhost`). Cấu hình runtime được lấy qua `GET /api/runtime-config` (cùng nội dung với `/config.js`).
-- `capacitor.config.ts` dùng `androidScheme: "http"` + `cleartext: true` để WebView được phép gọi `http://` / `ws://` tới máy trong LAN (với `https` sẽ bị chặn do mixed content). Workflow CI thêm `android:usesCleartextTraffic="true"` vào `AndroidManifest.xml`; nếu tự build, hãy kiểm tra thuộc tính này.
-- Danh sách Relay công cộng và kiểm tra allowlist/SSRF vẫn do Bridge Server trên máy tính quyết định (`CROC_RELAY_HOSTS`, `CROC_ALLOWED_PORTS`).
+- Transport native chỉ được đóng gói vào APK Capacitor. Web/PWA và Electron Desktop tiếp tục dùng Bridge Server như trước.
+- Chế độ Android trực tiếp dùng danh sách relay chính thức và TCP cổng `9009–9017`. Mạng chặn kết nối TCP đi ra các cổng này vẫn có thể làm truyền tệp thất bại; khi đó cần dùng mạng khác.
+- **Local Dual-Relay Lab** và relay tùy chỉnh vẫn cần Bridge Server, chưa dùng được trong chế độ Android trực tiếp.
+- `server.ts` vẫn được dùng cho Web, PWA, Desktop và các bản APK cũ.
+- Native bridge Android chỉ cho phép kết nối tới bốn máy chủ Croc chính thức qua cổng `9009–9017`.
 
 ---
 
