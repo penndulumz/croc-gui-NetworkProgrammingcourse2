@@ -300,15 +300,25 @@ class AsyncMessageQueue<T> {
   }
 }
 
+/**
+ * Giao diện thống nhất cho một kênh Relay (Relay Alpha hoặc Relay Beta),
+ * trừu tượng hóa sự khác biệt giữa WebSocket lab cục bộ (`/ws-dual`) và CrocSocket qua Bridge Server (`/ws`).
+ */
 interface RelayChannelConnection {
   lane: RelayLane;
   alive: boolean;
   sendJson: (msg: WirePlainMessage) => void;
+  /** Đợi toàn bộ dữ liệu đang xếp hàng trong socket được đẩy hết ra mạng trước khi đóng kênh. */
   flush?: () => Promise<void>;
   close: () => void;
 }
 
+/**
+ * Kích thước cửa sổ pipelining tối đa trên mỗi kênh Relay (`MAX_IN_FLIGHT_PER_LANE = 4`):
+ * cho phép gửi gối đầu tối đa 4 Chunk chưa có `chunk-ack` thay vì chờ từng Chunk một (1 Chunk/RTT).
+ */
 const MAX_IN_FLIGHT_PER_LANE = 4;
+/** Chu kỳ lặp gửi lại `pake-init` (350ms) khi máy nhận vào phòng trước máy gửi trên Relay không lưu đệm. */
 const PAKE_INIT_RETRY_MS = 350;
 
 function defaultWsBaseUrl(): string {
@@ -325,6 +335,13 @@ function defaultWebSocketFactory(url: string): WebSocketLike {
 /**
  * Resolves deterministic Public Croc Relay endpoints for Dual-Relay Alpha and Beta lanes
  * from the shared Codephrase so both peers always rendezvous without external signaling.
+ *
+ * Cơ chế ghép cặp xác định (deterministic pairing):
+ * - `alphaIndex`: dẫn xuất từ hàm băm `Codephrase` qua `relayIndex()`, đảm bảo máy gửi và máy nhận
+ *   tự động gặp nhau trên cùng một Public Relay Node mà không cần máy chủ điều phối trung tâm.
+ * - `betaIndex = (alphaIndex + 1) % N`: chọn node kế tiếp khác hẳn Alpha khi có từ 2 node trở lên.
+ * - Thu gọn về 1 kênh (`dualRelaySupported = N >= 2`): nếu chỉ có 1 Relay Node công cộng, tuyệt đối
+ *   không mở 2 luồng vào cùng một node mà thu gọn an toàn về `Relay Alpha` (`betaIndex = alphaIndex`).
  */
 export async function resolvePublicDualRelayPlan(
   codephrase: string,
@@ -350,6 +367,12 @@ export async function resolvePublicDualRelayPlan(
   };
 }
 
+/**
+ * Chuẩn bị ngữ cảnh kết nối và cặp giá trị RTT thực tế cho Enhanced Mode theo Relay Profile:
+ * - `Local Dual-Relay Lab`: không cần danh sách relay công cộng, chỉ lấy RTT đo được của nút lab Alpha/Beta.
+ * - `Public Croc Relays`: kiểm tra Bridge Server đã sẵn sàng danh sách relay chưa, tính cặp Alpha/Beta
+ *   từ `resolvePublicDualRelayPlan`, rồi lấy RTT đo thực tế (hoặc `null`) cho Protocol Inspector.
+ */
 export async function prepareEnhancedRelayContext(params: {
   codephrase: string;
   relayProfile: RelayProfileMode;
@@ -385,6 +408,11 @@ export async function prepareEnhancedRelayContext(params: {
   };
 }
 
+/**
+ * Mở kênh WebSocket trực tiếp tới endpoint `/ws-dual` của Local Dual-Relay Lab.
+ * Khác với Public Croc Relay, lab cục bộ phát sự kiện `peer_count` để báo ngay khi máy thứ hai vào phòng,
+ * giúp máy nhận kích hoạt lại `pake-init` tức thì mà không cần đợi hết chu kỳ 350ms.
+ */
 async function openLocalWsChannel(params: {
   baseWsUrl: string;
   lane: RelayLane;
@@ -480,6 +508,13 @@ async function openLocalWsChannel(params: {
   return conn;
 }
 
+/**
+ * Mở kênh qua Public Croc Relay thông qua Bridge Server (`/ws` + `CrocSocket` đóng khung độ dài).
+ * - Mỗi lane dùng phòng riêng (`${room}-${lane}`) trên Relay Node tương ứng (`alphaIndex` / `betaIndex`).
+ * - Chuỗi Promise `sendChain` tuần tự hóa các thao tác ghi bất đồng bộ vào `CrocSocket` để khung dữ liệu
+ *   không bị xen kẽ sai thứ tự khi pipelining nhiều Chunk đồng thời.
+ * - `flush()` đợi `sendChain` hoàn tất để bảo đảm khung cuối (như `complete`) đã ghi xong trước khi đóng socket.
+ */
 async function openPublicCrocChannel(params: {
   publicRelaySettings: PublicRelaySettings;
   relayIdx: number;
@@ -504,6 +539,7 @@ async function openPublicCrocChannel(params: {
     params.signal,
   );
 
+  // Tuần tự hóa hàng đợi ghi socket và cung cấp flush() tường minh trước khi đóng kết nối
   let sendChain: Promise<void> = Promise.resolve();
   const conn: RelayChannelConnection = {
     lane: params.lane,
@@ -550,6 +586,13 @@ async function openPublicCrocChannel(params: {
   return conn;
 }
 
+/**
+ * Mở song song kênh Relay Alpha (và Relay Beta nếu `dualRelay = true`) theo Relay Profile:
+ * - Profile `public`: dùng `openPublicCrocChannel` qua Bridge Server với cặp node từ `resolvePublicDualRelayPlan`.
+ *   Nếu danh sách chỉ có < 2 node (`!plan.dualRelaySupported`), tự thu gọn về 1 kênh Relay Alpha.
+ * - Profile `local-lab` / mặc định: dùng `openLocalWsChannel` tới `/ws-dual`.
+ * Nếu Relay Alpha mở thất bại thì ném lỗi phiên; nếu chỉ Relay Beta thất bại thì thu gọn về Relay Alpha.
+ */
 async function openEnhancedChannels(params: {
   room: string;
   role: "sender" | "receiver";
@@ -749,6 +792,8 @@ export async function sendEnhancedTransfer(options: {
     chunkSize = 64 * 1024,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
+    // Mặc định chunkDelayMs = 0: tránh đặt setTimeout giữa các Chunk vì trình duyệt chạy nền
+    // (Chromium background tab) sẽ kẹp timer xuống >= 1000ms, làm nghẽn thông lượng xuống ~1 chunk/giây.
     chunkDelayMs = 0,
     emitInspector = true,
     signal,
@@ -790,6 +835,8 @@ export async function sendEnhancedTransfer(options: {
   let skippedCount = 0;
   let bytesTransferred = 0;
 
+  // Hàng đợi đánh thức worker theo sự kiện (event-driven): worker ngủ khi cửa sổ in-flight đầy
+  // hoặc đang chờ lane kia, và thức dậy ngay khi có chunk-ack, Failover, complete hoặc AbortError.
   let workerWaiters: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
   const wakeWorkers = (fatalErr?: Error) => {
     const waiters = workerWaiters.splice(0);
@@ -842,11 +889,17 @@ export async function sendEnhancedTransfer(options: {
       betaChunks: snap.betaDelivered,
       failoverChunks: snap.failoverReroutedCount,
       alphaAlive: snap.alphaAlive,
+      // Trả về undefined khi chạy 1 kênh để UI phân biệt "không bật Dual-Relay" với "Relay Beta bị đứt"
       betaAlive: snap.dualEnabled ? snap.betaAlive : undefined,
       fileProgress,
     });
   };
 
+  /**
+   * Kích hoạt Failover đối xứng khi Relay Alpha hoặc Relay Beta đứt kết nối giữa chừng:
+   * đóng socket hỏng, chuyển toàn bộ Chunk chưa hoàn tất sang lane còn sống trong scheduler,
+   * cập nhật Protocol Inspector rồi đánh thức worker còn sống (`wakeWorkers()`) để phát bù ngay.
+   */
   const triggerLaneFailover = (failedLane: RelayLane, reason: string) => {
     if (failedLane === "alpha") {
       if (!alphaAlive || !effectiveDualRelay || !betaConn?.alive) return;
@@ -1031,6 +1084,7 @@ export async function sendEnhancedTransfer(options: {
       else throw new Error("Không còn kênh Relay hoạt động để gửi gói điều khiển");
     };
 
+    // Tạo sẵn thông điệp pake-reply dùng một bộ khóa ECDH duy nhất để phát lại idempotent khi cần
     const pakeReplyMsg: WirePlainMessage = {
       type: "pake-reply",
       pubKeyB64: bytesToBase64(myPubRaw),
@@ -1038,7 +1092,8 @@ export async function sendEnhancedTransfer(options: {
     };
     sendControlMsg(pakeReplyMsg);
 
-    // Verify receiver confirmation; idempotently re-reply if a duplicate pake-init arrives before confirm
+    // Chờ pake-confirm từ máy nhận; nếu máy nhận gửi lặp pake-init (chu kỳ 350ms) trước khi kịp nhận
+    // pake-reply, máy gửi phát lại chính xác pakeReplyMsg đó (idempotent) thay vì tạo khóa ECDH mới.
     let confirmMsg: Extract<WirePlainMessage, { type: "pake-confirm" }> | null = null;
     while (!confirmMsg) {
       const next = await incoming.next();
@@ -1063,7 +1118,7 @@ export async function sendEnhancedTransfer(options: {
       });
     }
 
-    // Send encrypted FolderManifest advertising effectiveDualRelay capability
+    // Gửi Folder Manifest đã mã hóa, quảng bá khả năng Dual-Relay (`effectiveDualRelay`) để thương lượng
     onStatus?.("Đang gửi Folder Manifest đã mã hóa cho máy nhận…");
     sendControlMsg(
       await encryptPayload(keys.aesKey, {
@@ -1073,7 +1128,7 @@ export async function sendEnhancedTransfer(options: {
       }),
     );
 
-    // Wait for receiver's ResumePlan + Dual-Relay negotiation
+    // Chờ ResumePlan và kết quả thương lượng `dualRelayAccepted` từ máy nhận trước khi chia Chunk
     while (true) {
       const next = await incoming.next();
       if (next.msg.type === "encrypted") {
@@ -1081,6 +1136,7 @@ export async function sendEnhancedTransfer(options: {
         if (decMsg.kind === "resume-plan") {
           missingIndices = decMsg.missingIndices;
           skippedCount = decMsg.skippedCount;
+          // Nếu máy nhận tắt Dual-Relay Transfer (lệch cấu hình), máy gửi đóng Relay Beta và thu gọn về Alpha
           if (decMsg.dualRelayAccepted === false && effectiveDualRelay) {
             effectiveDualRelay = false;
             betaAlive = false;
@@ -1148,7 +1204,7 @@ export async function sendEnhancedTransfer(options: {
     });
     void finishedPromise.catch(() => undefined);
 
-    // Background reader for chunk-ack, lane-down, and completion
+    // Vòng đọc nền tiếp nhận xác nhận `chunk-ack`, thông báo `lane-down`, và xác nhận `complete`
     const ackLoop = (async () => {
       try {
         while (!receiverFinished) {
@@ -1168,15 +1224,18 @@ export async function sendEnhancedTransfer(options: {
                 );
               }
               reportProgress();
+              // Giải phóng chỗ trống trong cửa sổ in-flight và đánh thức worker tiếp tục gửi
               wakeWorkers();
             }
           } else if (payload.kind === "lane-down") {
+            // Máy nhận báo một kênh vừa đóng đột ngột -> kích hoạt Failover đối xứng ngay lập tức
             if (payload.lane === "alpha" && alphaAlive && effectiveDualRelay && betaConn?.alive) {
               triggerLaneFailover("alpha", "Máy nhận mất kết nối kênh Relay Alpha");
             } else if (payload.lane === "beta" && betaAlive && effectiveDualRelay && alphaConn?.alive) {
               triggerLaneFailover("beta", "Máy nhận mất kết nối kênh Relay Beta");
             }
           } else if (payload.kind === "complete") {
+            // Đối soát các Chunk chưa kịp nhận `chunk-ack` trên lane chậm hơn khi `complete` tới trước
             const finalized = scheduler.markRemainingDelivered();
             for (const item of finalized) {
               const desc = chunkLookup.get(item.globalIndex);
@@ -1209,6 +1268,12 @@ export async function sendEnhancedTransfer(options: {
     })();
     void ackLoop.catch(() => undefined);
 
+    /**
+     * Worker phát Chunk cho một lane (`alpha` hoặc `beta`) theo cơ chế windowed pipelining:
+     * - Gửi gối đầu tối đa `MAX_IN_FLIGHT_PER_LANE` (4) Chunk chưa có `chunk-ack` thay vì chờ tuần tự từng Chunk.
+     * - Khi cửa sổ đầy hoặc lane tạm hết Chunk trong lúc lane kia còn sống (có khả năng Failover sau này),
+     *   worker ngủ bằng `waitForWorkerSignal()` và được đánh thức theo sự kiện qua `wakeWorkers()`.
+     */
     const runLaneWorker = async (lane: RelayLane) => {
       while (!receiverFinished && !scheduler!.isComplete()) {
         if (controller.signal.aborted) {
@@ -1445,6 +1510,8 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     const handleMsg = (lane: RelayLane, msg: WirePlainMessage) => {
       incoming.push({ lane, msg });
     };
+    // Khi phòng có từ 2 peer trở lên (máy gửi vừa vào sau máy nhận), phát lại ngay `pake-init`
+    // để bắt tay không phải chờ hết chu kỳ lặp 350ms.
     const handlePeerCount = (_lane: RelayLane, count: number) => {
       if (count >= 2 && !gotPakeReply && sendPakeInitFn) {
         sendPakeInitFn();
@@ -1459,6 +1526,8 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         return;
       }
 
+      // Nếu một kênh đứt giữa phiên khi đã có khóa phiên, chủ động gửi `lane-down` qua kênh còn sống
+      // để máy gửi kích hoạt Failover ngay mà không phải đợi socket bên gửi tự phát hiện đứt kết nối.
       if (sessionKeys && !transferComplete && !controller.signal.aborted) {
         const surviving = closedLane === "alpha" ? betaConn : alphaConn;
         if (surviving?.alive) {
@@ -1528,6 +1597,9 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       }
     };
 
+    // Bắt tay PAKE idempotent từ phía máy nhận (hỗ trợ Receiver-first join trên Relay không đệm tin):
+    // Gửi cùng một `pakeInitMsg` ngay khi mở kênh, khi nhận `peer_count >= 2`, và lặp mỗi 350ms
+    // (`PAKE_INIT_RETRY_MS`) cho tới khi nhận được `pake-reply` hoặc AbortSignal hủy phiên.
     const pakeInitMsg: WirePlainMessage = {
       type: "pake-init",
       pubKeyB64: bytesToBase64(myPubRaw),
@@ -1627,7 +1699,9 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       }
     }
 
-    // Negotiate effective Dual-Relay mode; close idle Beta if single-channel is chosen
+    // Thương lượng chế độ Dual-Relay Transfer tại ranh giới `manifest` -> `resume-plan`:
+    // Chỉ bật 2 kênh khi cả máy gửi, máy nhận và kết nối Relay Beta đều sẵn sàng;
+    // ngược lại đóng ngay Relay Beta nhàn rỗi và phản hồi `dualRelayAccepted = false` trong `resume-plan`.
     const negotiatedDual = senderDualRelay && effectiveDualRelay && Boolean(betaConn?.alive);
     if (effectiveDualRelay && !negotiatedDual) {
       effectiveDualRelay = false;
@@ -1717,7 +1791,8 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       if (!desc) continue;
 
       if (chunkBuffers.has(desc.globalIndex)) {
-        // Re-acknowledge duplicates so a sender whose earlier ACK dropped on failover unblocks
+        // Phát lại `chunk-ack` nếu nhận trùng Chunk (thường xảy ra khi ACK cũ rơi mất lúc Failover)
+        // để giải phóng cửa sổ in-flight và tránh làm kẹt worker phía máy gửi.
         sendControlMsg(
           await encryptPayload(keys.aesKey, {
             kind: "chunk-ack",
@@ -1799,6 +1874,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         betaChunks: betaReceived,
         failoverChunks: failoverReceived,
         alphaAlive: Boolean(alphaConn?.alive),
+        // Chỉ báo trạng thái sống/chết của Relay Beta khi chạy Dual-Relay Transfer; ở chế độ 1 kênh giữ undefined
         betaAlive: effectiveDualRelay ? Boolean(betaConn?.alive) : undefined,
         fileProgress,
       });
@@ -1843,7 +1919,8 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       kind: "complete",
       totalVerified: manifest.totalChunks,
     });
-    // Broadcast completion on every live channel so failover never drops the final ACK
+    // Phát `complete` trên tất cả các kênh còn sống để tránh mất xác nhận cuối khi xảy ra Failover,
+    // sau đó flush() tường minh hàng đợi ghi CrocSocket trước khi finally đóng các kết nối.
     let sentComplete = false;
     if (alphaConn?.alive) {
       try {

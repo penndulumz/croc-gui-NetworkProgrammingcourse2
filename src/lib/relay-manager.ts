@@ -81,6 +81,10 @@ export function saveRelayLatencies(
   }
 }
 
+/**
+ * Đo RTT thực tế tới từng Public Croc Relay thông qua endpoint `/api/relays/ping`
+ * của Bridge Server, rồi lưu kết quả vào Storage (không bịa giá trị mặc định).
+ */
 export async function probePublicRelays(
   relayAddresses: string[],
 ): Promise<Record<string, number | null>> {
@@ -108,11 +112,21 @@ export async function probePublicRelays(
   return latencies;
 }
 
+/**
+ * Tách phần host khỏi chuỗi địa chỉ `host:port`.
+ * Dùng `lastIndexOf(":")` thay vì `split(":")` để giữ nguyên định dạng nếu host là địa chỉ IPv6.
+ */
 export function extractRelayHost(address: string): string {
   const lastColon = address.lastIndexOf(":");
   return lastColon > 0 ? address.slice(0, lastColon) : address;
 }
 
+/**
+ * Tra cứu RTT đo thực tế của Relay Node tại vị trí `idx` trong danh sách `relayAddresses`.
+ * Thử lần lượt các khóa có thể có (`addr` đầy đủ -> `host` -> `idx` -> `public-${idx}`) vì
+ * kết quả đo có thể được lưu dưới các khóa định danh khác nhau.
+ * Chỉ chấp nhận số hữu hạn `>= 0`; trả về `null` nếu chưa đo được, tuyệt đối không dùng giá trị giả.
+ */
 function lookupRelayRtt(
   latencies: Record<string, number | null>,
   relayAddresses: string[],
@@ -128,6 +142,10 @@ function lookupRelayRtt(
   return typeof rtt === "number" && Number.isFinite(rtt) && rtt >= 0 ? rtt : null;
 }
 
+/**
+ * Tìm Public Relay Node có RTT đo thực tế thấp nhất để ưu tiên làm kênh chính khi tạo Codephrase.
+ * Bỏ qua mọi node có RTT là `null` (chưa đo được); trả về `null` nếu chưa có số liệu đo nào.
+ */
 export function findFastestRelay(
   latencies: Record<string, number | null>,
   relayAddresses: string[],
@@ -150,6 +168,14 @@ export function findFastestRelay(
   return fastest;
 }
 
+/**
+ * Giải quyết cặp RTT thực tế (`alphaRttMs`, `betaRttMs`) cho phiên Dual-Relay Transfer
+ * để hiển thị lên Protocol Inspector theo đúng Relay Profile đang chọn:
+ * - `Local Dual-Relay Lab`: đọc trực tiếp khóa đo của nút lab Alpha và Beta.
+ * - `Public Croc Relays`: tra cứu theo `alphaIndex` và `betaIndex` trong `relayAddresses`.
+ * Giữ nguyên `null` khi chưa có phép đo thực tế — không tự cộng/trừ độ trễ giả (synthetic offset)
+ * và không thay bằng giá trị ước lượng giả tạo.
+ */
 export function resolveStreamPairRtts(params: {
   relayProfile: RelayProfileMode;
   latencies: Record<string, number | null>;
@@ -205,6 +231,11 @@ export function saveRelayProfile(
   }
 }
 
+/**
+ * Trả về cấu hình endpoint của Bridge Server tương ứng với Relay Profile:
+ * - `Public Croc Relays`: dùng `/ws` để tunnel tới Public Croc Relay TCP.
+ * - `Local Dual-Relay Lab`: dùng `/ws-dual` cho phòng lab 2 Relay cục bộ.
+ */
 export function getRelayProfileEndpoints(
   profile: RelayProfileMode,
   protocol?: string,
@@ -244,6 +275,10 @@ export function saveCustomRelays(relays: CustomRelayConfig[]): void {
   }
 }
 
+/**
+ * Đo RTT đơn lẻ tới một Relay Node (cục bộ hoặc công cộng đã allowlist).
+ * Custom relay không thể probe trực tiếp qua Bridge Server công cộng để bảo vệ chống SSRF.
+ */
 export async function pingRelayNode(node: RelayNodeEntry): Promise<{
   ok: boolean;
   rttMs: number | null;

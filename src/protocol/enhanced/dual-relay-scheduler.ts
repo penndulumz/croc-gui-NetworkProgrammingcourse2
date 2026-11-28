@@ -2,18 +2,19 @@
  * @file dual-relay-scheduler.ts
  * @description State machine for dual-relay chunk scheduling and dynamic failover.
  *
- * Architecture & Mechanism:
+ * Architecture & Mechanism / Kiến trúc & Cơ chế hoạt động:
  * In standard single-relay transfers, if a network bottleneck or socket disconnection
  * occurs on the relay, the transfer stalls or must restart from scratch.
  *
- * CrocFlow dual-relay architecture runs two concurrent relay pipelines:
- *   - Lane Alpha (Relay 1): Assigned even chunk indices (0, 2, 4, 6...)
- *   - Lane Beta (Relay 2): Assigned odd chunk indices (1, 3, 5, 7...)
+ * CrocFlow Dual-Relay Transfer runs two concurrent Relay Node pipelines:
+ *   - Relay Alpha: Gán các Chunk chỉ số chẵn (0, 2, 4, 6...)
+ *   - Relay Beta:  Gán các Chunk chỉ số lẻ (1, 3, 5, 7...)
  *
  * Key characteristics:
- *   1. Bandwidth Multiplexing: Transfers stream across two separate routes concurrently.
- *   2. Dynamic Failover: If Relay Alpha drops mid-stream, triggerAlphaFailover() reroutes
- *      all undelivered Alpha chunks to Relay Beta without losing chunks already delivered.
+ *   1. Bandwidth Multiplexing: Truyền song song qua 2 tuyến Relay độc lập để tăng thông lượng.
+ *   2. Symmetric Dynamic Failover: Khi Relay Alpha hoặc Relay Beta đứt kết nối giữa phiên,
+ *      triggerAlphaFailover() / triggerBetaFailover() (thông qua triggerLaneFailover) lập tức
+ *      chuyển hướng toàn bộ Chunk chưa được xác nhận sang Relay còn sống mà không mất dữ liệu đã nhận.
  */
 
 export type RelayLane = "alpha" | "beta";
@@ -26,9 +27,15 @@ export interface ScheduledChunk {
   globalIndex: number;
   /** Initial planned lane based on parity (even -> alpha, odd -> beta) */
   initialLane: RelayLane;
-  /** Current active lane (may change to 'beta' during failover) */
+  /** Current active lane (may change to the surviving lane 'beta' or 'alpha' during Failover) */
   activeLane: RelayLane;
-  /** Lifecycle state: pending -> in-flight -> delivered (or rerouted) */
+  /**
+   * Vòng đời trạng thái của mỗi Chunk:
+   * - `pending`: chưa từng cấp phát cho worker nào.
+   * - `in-flight`: đã giao cho worker gửi đi, đang chờ `chunk-ack` xác thực SHA-256 từ máy nhận.
+   * - `rerouted`: từng thuộc lane bị đứt (`pending` hoặc `in-flight`), đã chuyển sang lane sống chờ phát lại.
+   * - `delivered`: máy nhận đã xác nhận toàn vẹn (hoặc đã đối soát qua `complete`).
+   */
   status: "pending" | "in-flight" | "delivered" | "rerouted";
   /** Flag marking whether this chunk was saved from a failed relay */
   rerouted: boolean;
@@ -49,8 +56,8 @@ export interface DualRelaySnapshot {
 }
 
 /**
- * Pure state machine implementing Dual-Relay Even/Odd chunk allocation
- * and automatic Failover when Relay Alpha disconnects mid-transfer.
+ * Máy trạng thái thuần túy điều phối phân bổ Chunk chẵn/lẻ trong Dual-Relay Transfer
+ * và thực hiện Failover tự động đối xứng khi Relay Alpha hoặc Relay Beta mất kết nối giữa phiên.
  */
 export class DualRelayScheduler {
   private items = new Map<number, ScheduledChunk>();
@@ -62,9 +69,10 @@ export class DualRelayScheduler {
   private failoverReroutedCount = 0;
 
   /**
-   * Initializes the scheduler with chunk indices.
-   * If dualEnabled is true, even chunks map to Alpha, odd chunks map to Beta.
-   * If dualEnabled is false (single-relay fallback), all chunks map to Alpha.
+   * Khởi tạo bộ lập lịch từ danh sách chỉ số Chunk cần truyền (thường là `missingIndices` sau Resume Cache).
+   * - Khi `dualEnabled = true`: áp dụng chia chẵn/lẻ — Chunk chẵn (0, 2, 4...) đi qua Relay Alpha,
+   *   Chunk lẻ (1, 3, 5...) đi qua Relay Beta.
+   * - Khi `dualEnabled = false` (chế độ 1 kênh Relay Alpha): toàn bộ Chunk gán vào Relay Alpha và `betaAlive = false`.
    */
   constructor(chunkIndices: number[], dualEnabled = true) {
     this.dualEnabled = dualEnabled;
@@ -92,9 +100,9 @@ export class DualRelayScheduler {
   }
 
   /**
-   * Fetches the next available chunk for a specific relay lane.
-   * Marks the chunk as "in-flight" to prevent duplicate concurrent dispatches.
-   * Returns null if lane is offline or no chunks are pending for it.
+   * Lấy Chunk kế tiếp sẵn sàng phát trên `lane` (`pending` hoặc `rerouted` sau Failover).
+   * Chuyển ngay trạng thái sang `"in-flight"` để tránh hai worker hoặc vòng lặp cấp phát trùng một Chunk.
+   * Trả về `null` nếu lane đã ngoại tuyến hoặc không còn Chunk chờ trên lane này.
    */
   nextForLane(lane: RelayLane): ScheduledChunk | null {
     if (lane === "alpha" && !this.alphaAlive) return null;
@@ -110,7 +118,9 @@ export class DualRelayScheduler {
   }
 
   /**
-   * Returns the count of chunks currently in-flight on the given lane.
+   * Đếm số Chunk đang ở trạng thái `"in-flight"` trên một lane.
+   * Worker dựa vào bộ đếm này để giữ cửa sổ pipelining không vượt quá `MAX_IN_FLIGHT_PER_LANE` (4),
+   * giúp tăng thông lượng nhiều Chunk/RTT mà vẫn kiểm soát được bộ đệm khi xảy ra Failover.
    */
   inFlightCountForLane(lane: RelayLane): number {
     let count = 0;
@@ -131,8 +141,9 @@ export class DualRelayScheduler {
   }
 
   /**
-   * Records chunk delivery receipt upon SHA-256 verification.
-   * Increments lane metrics and ensures idempotency (already delivered chunks are ignored).
+   * Ghi nhận Chunk đã được máy nhận kiểm tra SHA-256 và xác nhận qua `chunk-ack`.
+   * Cập nhật bộ đếm theo lane thực tế đã giao (`deliveredOnLane`) và đảm bảo tính idempotent
+   * (nếu `chunk-ack` trùng lặp đến sau Failover thì bỏ qua, không cộng dồn metrics).
    */
   markDelivered(globalIndex: number, deliveredOnLane: RelayLane): boolean {
     const item = this.items.get(globalIndex);
@@ -145,9 +156,10 @@ export class DualRelayScheduler {
   }
 
   /**
-   * Marks all remaining non-delivered chunks as delivered on their active lanes.
-   * Used when the peer's full-manifest `complete` confirmation arrives over a faster
-   * channel ahead of trailing per-chunk ACKs on the slower channel.
+   * Đối soát và chốt toàn bộ các Chunk còn lại chưa ở trạng thái `"delivered"` thành `"delivered"`.
+   * Vì sao cần: Trong Dual-Relay Transfer, máy nhận phát `complete` trên cả hai kênh ngay khi
+   * ghép và xác thực xong toàn bộ Folder Manifest; thông điệp `complete` đi qua kênh nhanh hơn có thể
+   * vượt mặt (overtake) các `chunk-ack` cuối cùng đang còn trên đường truyền từ kênh chậm hơn.
    */
   markRemainingDelivered(): ScheduledChunk[] {
     const finalized: ScheduledChunk[] = [];
@@ -162,6 +174,14 @@ export class DualRelayScheduler {
     return finalized;
   }
 
+  /**
+   * Chuyển đổi Failover đối xứng dùng chung cho cả Relay Alpha và Relay Beta:
+   * 1. Đánh dấu `failedLane` ngoại tuyến (idempotent nếu lane đã tắt trước đó).
+   * 2. Nếu lane đối ứng còn sống, chuyển toàn bộ Chunk chưa `delivered` (`pending` hoặc `in-flight`)
+   *    đang gán cho `failedLane` sang `survivingLane`, đổi trạng thái thành `"rerouted"` và bật cờ `rerouted = true`
+   *    để worker của lane còn sống nhận việc và truyền bù ngay lập tức.
+   * 3. Nếu cả hai lane đều đã tắt thì trả về `[]` vì không còn đường chuyển hướng.
+   */
   private triggerLaneFailover(failedLane: RelayLane): number[] {
     if (failedLane === "alpha") {
       if (!this.alphaAlive) return [];
