@@ -306,6 +306,59 @@ test("Enhanced Dual-Relay negotiates cleanly when Sender enables dualRelay and R
   }
 });
 
+test("Enhanced Dual-Relay negotiates cleanly when Sender disables dualRelay and Receiver enables it", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-mismatch-off-on-88",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    recvPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-mismatch-off-on-88",
+      dualRelay: false,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Dual-Relay OFF/ON mismatch negotiation timed out")), 2000),
+      ),
+    ]);
+
+    assert.equal(sendRes.betaDelivered, 0);
+    assert.equal(sendRes.alphaDelivered, 7);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
 test("Enhanced Dual-Relay survives live Relay Beta disconnect by failing over odd chunks to Alpha", async () => {
   const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
   const { port } = await server.listen(0, "127.0.0.1");
@@ -478,18 +531,19 @@ test("resolvePublicDualRelayPlan deterministically assigns distinct Alpha and Be
   const p2 = await resolvePublicDualRelayPlan("4281-mango-solar-river", relays);
   assert.deepEqual(p1, p2);
   assert.notEqual(p1.alphaIndex, p1.betaIndex);
-  assert.equal(p1.singleHostFallback, false);
+  assert.equal(p1.dualRelaySupported, true);
 
   const single = await resolvePublicDualRelayPlan("4281-mango-solar-river", ["custom.relay:9009"]);
   assert.equal(single.alphaIndex, 0);
   assert.equal(single.betaIndex, 0);
   assert.equal(single.alphaPort, "9009");
-  assert.equal(single.betaPort, "9010");
-  assert.equal(single.singleHostFallback, true);
+  assert.equal(single.betaPort, "9009");
+  assert.equal(single.dualRelaySupported, false);
 });
 
-test("Enhanced Dual-Relay with relayProfile='public' streams across two Croc-framed relay channels and handles Alpha failover", async () => {
+function createVirtualCrocConnector() {
   const rooms = new Map<string, Array<{ pushFrame: (bytes: Uint8Array) => void; close: () => void }>>();
+  const dialedRooms: string[] = [];
 
   function createVirtualCrocSocket(roomKey: string) {
     const decoder = new FrameDecoder();
@@ -552,9 +606,16 @@ test("Enhanced Dual-Relay with relayProfile='public' streams across two Croc-fra
     _port: string,
     relayIndex: number,
   ) => {
+    dialedRooms.push(room);
     const socket = createVirtualCrocSocket(`${relayIndex}::${room}`);
     return { socket, banner: "9009,9010", externalIP: "127.0.0.1" };
   };
+
+  return { fakeConnectRelay, dialedRooms };
+}
+
+test("Enhanced Dual-Relay with relayProfile='public' streams across two Croc-framed relay channels and handles Alpha failover", async () => {
+  const { fakeConnectRelay } = createVirtualCrocConnector();
 
   const files = makeTestFiles(false);
   const { adapter } = createMemoryCache();
@@ -707,4 +768,54 @@ test("Enhanced Dual-Relay finishes cleanly even when Beta is faster and complete
     (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
     await server.close();
   }
+});
+
+test("Enhanced Dual-Relay with relayProfile='public' and 1 relay narrows to single-lane Alpha without dialing Beta", async () => {
+  const { fakeConnectRelay, dialedRooms } = createVirtualCrocConnector();
+  const files = makeTestFiles(false); // 7 chunks
+  const { adapter } = createMemoryCache();
+  const singleRelaySettings = {
+    bridgeURL: "ws://unused/ws",
+    relayAddresses: ["solo.croc.example:9009"],
+    relayPassword: "pass123",
+  };
+  const recvBetaStates: Array<boolean | undefined> = [];
+
+  const sendPromise = sendEnhancedTransfer({
+    files,
+    codephrase: "4281-public-single-fallback",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: singleRelaySettings,
+    publicConnectRelay: fakeConnectRelay as never,
+    chunkSize: 16 * 1024,
+    emitInspector: false,
+  });
+
+  await new Promise((r) => setTimeout(r, 20));
+
+  const recvPromise = receiveEnhancedTransfer({
+    codephrase: "4281-public-single-fallback",
+    dualRelay: true,
+    relayProfile: "public",
+    publicRelaySettings: singleRelaySettings,
+    publicConnectRelay: fakeConnectRelay as never,
+    cache: adapter,
+    emitInspector: false,
+    onProgress: (p) => recvBetaStates.push(p.betaAlive),
+  });
+
+  const [sendRes, recvRes] = await Promise.race([
+    Promise.all([sendPromise, recvPromise]),
+    new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("1-relay public single-lane fallback timed out")), 3000),
+    ),
+  ]);
+
+  assert.equal(dialedRooms.some((r) => r.endsWith("-beta")), false);
+  assert.equal(sendRes.alphaDelivered, 7);
+  assert.equal(sendRes.betaDelivered, 0);
+  assert.equal(recvBetaStates.every((v) => v === undefined), true);
+  assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+  assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
 });

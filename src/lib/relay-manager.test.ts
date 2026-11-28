@@ -229,4 +229,10 @@ test("resolveStreamPairRtts returns real measured latencies without fabricated o
     latencies: { "local-alpha": 1.2, "local-beta": 1.5 },
   });
   assert.deepEqual(localRtts, { alphaRttMs: 1.2, betaRttMs: 1.5 });
+
+  const localUnmeasured = resolveStreamPairRtts({
+    relayProfile: "local-lab",
+    latencies: {},
+  });
+  assert.deepEqual(localUnmeasured, { alphaRttMs: null, betaRttMs: null });
 });

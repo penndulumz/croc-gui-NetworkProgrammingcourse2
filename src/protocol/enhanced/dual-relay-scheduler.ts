@@ -68,6 +68,7 @@ export class DualRelayScheduler {
    */
   constructor(chunkIndices: number[], dualEnabled = true) {
     this.dualEnabled = dualEnabled;
+    this.betaAlive = dualEnabled;
     for (const idx of chunkIndices) {
       const lane: RelayLane = dualEnabled ? (idx % 2 === 0 ? "alpha" : "beta") : "alpha";
       this.items.set(idx, {

@@ -24,8 +24,8 @@ import { receiveFiles } from "../protocol/croc/client";
 import { DownloadDestination, TextDestination } from "../protocol/croc/storage";
 import type { FileProgress as CrocFileProgress, OfferedFile, TransferOffer } from "../protocol/croc/types";
 import {
+  prepareEnhancedRelayContext,
   receiveEnhancedTransfer,
-  resolvePublicDualRelayPlan,
   type EnhancedProgress,
   type ReceivedEnhancedFile,
 } from "../protocol/enhanced/enhanced-client";
@@ -52,7 +52,6 @@ import { downloadZipArchive, saveEntriesToDirectory, type ZipEntry } from "../li
 import {
   isLocalLabProfile,
   loadRelayLatencies,
-  resolveStreamPairRtts,
   type RelayProfileMode,
 } from "../lib/relay-manager";
 import type { Locale } from "../lib/i18n";
@@ -499,40 +498,20 @@ export function ReceiveView({
     }
 
     // Enhanced Mode Receive
-    if (!isLocalProfile && (!bridgeConfig || bridgeConfig.relayAddresses.length === 0)) {
-      setErrorText("Bridge Server chưa sẵn sàng danh sách Relay công cộng.");
-      setBusy(false);
-      return;
-    }
     try {
       const wsDualUrl = bridgeWsURL("/ws-dual");
-      const latencies = loadRelayLatencies();
-      if (!isLocalProfile && bridgeConfig?.relayAddresses.length) {
-        const plan = await resolvePublicDualRelayPlan(secret, bridgeConfig.relayAddresses);
-        setStreamPairRtts(
-          resolveStreamPairRtts({
-            relayProfile,
-            latencies,
-            relayAddresses: bridgeConfig.relayAddresses,
-            alphaIndex: plan.alphaIndex,
-            betaIndex: plan.betaIndex,
-          }),
-        );
-      } else {
-        setStreamPairRtts(resolveStreamPairRtts({ relayProfile, latencies }));
-      }
+      const relayContext = await prepareEnhancedRelayContext({
+        codephrase: secret,
+        relayProfile,
+        bridgeConfig,
+        latencies: loadRelayLatencies(),
+      });
+      setStreamPairRtts(relayContext.streamPairRtts);
       const res = await receiveEnhancedTransfer({
         codephrase: secret,
         dualRelay,
         relayProfile,
-        publicRelaySettings:
-          !isLocalProfile && bridgeConfig
-            ? {
-                bridgeURL: bridgeWsURL("/ws"),
-                relayAddresses: bridgeConfig.relayAddresses,
-                relayPassword: bridgeConfig.relayPassword,
-              }
-            : undefined,
+        publicRelaySettings: relayContext.publicRelaySettings,
         baseWsUrl: wsDualUrl,
         signal: controller.signal,
         onStatus: setStatusText,

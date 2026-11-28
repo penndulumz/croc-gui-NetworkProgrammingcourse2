@@ -25,7 +25,7 @@ import { prepareFiles, prepareText, sendFiles } from "../protocol/croc/client";
 import { maxTextTransferBytes, type FileProgress as CrocFileProgress } from "../protocol/croc/types";
 import {
   filesToManifestInputs,
-  resolvePublicDualRelayPlan,
+  prepareEnhancedRelayContext,
   sendEnhancedTransfer,
   type EnhancedControlHandle,
   type EnhancedProgress,
@@ -52,7 +52,6 @@ import {
   isLocalLabProfile,
   loadRelayLatencies,
   probePublicRelays,
-  resolveStreamPairRtts,
   type RelayProfileMode,
 } from "../lib/relay-manager";
 import type { Locale } from "../lib/i18n";
@@ -148,7 +147,7 @@ export function SendView({
       if (shouldOptimizePublic) {
         let latencies = loadRelayLatencies();
         let fastest = findFastestRelay(latencies, relayAddresses);
-        if (!fastest && targetMode === "standard") {
+        if (!fastest) {
           try {
             latencies = await probePublicRelays(relayAddresses);
             fastest = findFastestRelay(latencies, relayAddresses);
@@ -396,9 +395,16 @@ export function SendView({
       setErrorText("Hãy chọn ít nhất 1 tệp hoặc 1 thư mục cần gửi.");
       return;
     }
-    const localLabActive = isLocalLabProfile(relayProfile);
-    if (!localLabActive && (!bridgeConfig || bridgeConfig.relayAddresses.length === 0)) {
-      setErrorText("Bridge Server chưa sẵn sàng danh sách Relay Croc công cộng.");
+    let relayContext: Awaited<ReturnType<typeof prepareEnhancedRelayContext>>;
+    try {
+      relayContext = await prepareEnhancedRelayContext({
+        codephrase: secret,
+        relayProfile,
+        bridgeConfig,
+        latencies: loadRelayLatencies(),
+      });
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : String(err));
       return;
     }
 
@@ -408,35 +414,14 @@ export function SendView({
     try {
       const inputs = await filesToManifestInputs(selectedFiles);
       const wsDualUrl = bridgeWsURL("/ws-dual");
-      const latencies = loadRelayLatencies();
-      if (!localLabActive && bridgeConfig?.relayAddresses.length) {
-        const plan = await resolvePublicDualRelayPlan(secret, bridgeConfig.relayAddresses);
-        setStreamPairRtts(
-          resolveStreamPairRtts({
-            relayProfile,
-            latencies,
-            relayAddresses: bridgeConfig.relayAddresses,
-            alphaIndex: plan.alphaIndex,
-            betaIndex: plan.betaIndex,
-          }),
-        );
-      } else {
-        setStreamPairRtts(resolveStreamPairRtts({ relayProfile, latencies }));
-      }
+      setStreamPairRtts(relayContext.streamPairRtts);
 
       const res = await sendEnhancedTransfer({
         files: inputs,
         codephrase: secret,
         dualRelay,
         relayProfile,
-        publicRelaySettings:
-          !localLabActive && bridgeConfig
-            ? {
-                bridgeURL: bridgeWsURL("/ws"),
-                relayAddresses: bridgeConfig.relayAddresses,
-                relayPassword: bridgeConfig.relayPassword,
-              }
-            : undefined,
+        publicRelaySettings: relayContext.publicRelaySettings,
         chunkSize,
         chunkDelayMs: 0,
         baseWsUrl: wsDualUrl,

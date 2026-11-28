@@ -16,7 +16,12 @@ import { bridgeWsURL } from "../../lib/bridge-origin";
 import { relayIndex } from "../croc/codephrase";
 import { connectRelay, controlPort } from "../croc/relay";
 import type { CrocSocket } from "../croc/transport";
-import { isLocalLabProfile, type RelayProfileMode } from "../../lib/relay-manager";
+import {
+  extractRelayHost,
+  isLocalLabProfile,
+  resolveStreamPairRtts,
+  type RelayProfileMode,
+} from "../../lib/relay-manager";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -83,7 +88,7 @@ export interface PublicDualRelayPlan {
   betaHost: string;
   alphaPort: string;
   betaPort: string;
-  singleHostFallback: boolean;
+  dualRelaySupported: boolean;
 }
 
 export interface ReceivedEnhancedFile {
@@ -317,19 +322,6 @@ function defaultWebSocketFactory(url: string): WebSocketLike {
   return new WebSocket(url) as unknown as WebSocketLike;
 }
 
-function resolveTargetWsBaseUrl(baseWsUrl: string, targetRelayNode?: string): string {
-  if (!targetRelayNode) return baseWsUrl;
-  if (targetRelayNode.startsWith("ws://") || targetRelayNode.startsWith("wss://")) {
-    return targetRelayNode;
-  }
-  return baseWsUrl;
-}
-
-function extractRelayHost(address: string): string {
-  const lastColon = address.lastIndexOf(":");
-  return lastColon > 0 ? address.slice(0, lastColon) : address;
-}
-
 /**
  * Resolves deterministic Public Croc Relay endpoints for Dual-Relay Alpha and Beta lanes
  * from the shared Codephrase so both peers always rendezvous without external signaling.
@@ -342,27 +334,54 @@ export async function resolvePublicDualRelayPlan(
     throw new Error("Chưa có cấu hình Relay Croc công cộng.");
   }
   const alphaIndex = await relayIndex(codephrase, relayAddresses.length);
-  const singleHostFallback = relayAddresses.length === 1;
-  const betaIndex = singleHostFallback ? alphaIndex : (alphaIndex + 1) % relayAddresses.length;
+  const dualRelaySupported = relayAddresses.length >= 2;
+  const betaIndex = dualRelaySupported ? (alphaIndex + 1) % relayAddresses.length : alphaIndex;
   const alphaAddr = relayAddresses[alphaIndex];
   const betaAddr = relayAddresses[betaIndex];
-  const alphaPort = controlPort(alphaAddr);
-  const rawBetaPort = controlPort(betaAddr);
-  const betaPort =
-    singleHostFallback && rawBetaPort === alphaPort
-      ? alphaPort === "9009"
-        ? "9010"
-        : "9009"
-      : rawBetaPort;
 
   return {
     alphaIndex,
     betaIndex,
     alphaHost: extractRelayHost(alphaAddr),
     betaHost: extractRelayHost(betaAddr),
-    alphaPort,
-    betaPort,
-    singleHostFallback,
+    alphaPort: controlPort(alphaAddr),
+    betaPort: controlPort(betaAddr),
+    dualRelaySupported,
+  };
+}
+
+export async function prepareEnhancedRelayContext(params: {
+  codephrase: string;
+  relayProfile: RelayProfileMode;
+  bridgeConfig: { relayAddresses: string[]; relayPassword: string } | null;
+  latencies: Record<string, number | null>;
+}): Promise<{
+  publicRelaySettings?: PublicRelaySettings;
+  streamPairRtts: { alphaRttMs: number | null; betaRttMs: number | null };
+}> {
+  const { codephrase, relayProfile, bridgeConfig, latencies } = params;
+  if (isLocalLabProfile(relayProfile)) {
+    return {
+      streamPairRtts: resolveStreamPairRtts({ relayProfile, latencies }),
+    };
+  }
+  if (!bridgeConfig || bridgeConfig.relayAddresses.length === 0) {
+    throw new Error("Bridge Server chưa sẵn sàng danh sách Relay Croc công cộng.");
+  }
+  const plan = await resolvePublicDualRelayPlan(codephrase, bridgeConfig.relayAddresses);
+  return {
+    publicRelaySettings: {
+      bridgeURL: bridgeWsURL("/ws"),
+      relayAddresses: bridgeConfig.relayAddresses,
+      relayPassword: bridgeConfig.relayPassword,
+    },
+    streamPairRtts: resolveStreamPairRtts({
+      relayProfile,
+      latencies,
+      relayAddresses: bridgeConfig.relayAddresses,
+      alphaIndex: plan.alphaIndex,
+      betaIndex: plan.betaIndex,
+    }),
   };
 }
 
@@ -371,23 +390,14 @@ async function openLocalWsChannel(params: {
   lane: RelayLane;
   room: string;
   role: "sender" | "receiver";
-  targetRelayNode?: string;
   wsFactory: WebSocketFactory;
   onMessage: (lane: RelayLane, msg: WirePlainMessage) => void;
   onPeerCount?: (lane: RelayLane, count: number) => void;
   onClose: (lane: RelayLane) => void;
   signal?: AbortSignal;
 }): Promise<RelayChannelConnection> {
-  const base = resolveTargetWsBaseUrl(params.baseWsUrl, params.targetRelayNode);
-  const separator = base.includes("?") ? "&" : "?";
-  let url = `${base}${separator}channel=${params.lane}&room=${encodeURIComponent(params.room)}&role=${params.role}`;
-  if (
-    params.targetRelayNode &&
-    !params.targetRelayNode.startsWith("ws://") &&
-    !params.targetRelayNode.startsWith("wss://")
-  ) {
-    url += `&node=${encodeURIComponent(params.targetRelayNode)}`;
-  }
+  const separator = params.baseWsUrl.includes("?") ? "&" : "?";
+  const url = `${params.baseWsUrl}${separator}channel=${params.lane}&room=${encodeURIComponent(params.room)}&role=${params.role}`;
   const ws = params.wsFactory(url);
   ws.binaryType = "arraybuffer";
 
@@ -547,7 +557,6 @@ async function openEnhancedChannels(params: {
   dualRelay: boolean;
   relayProfile?: RelayProfileMode;
   publicRelaySettings?: PublicRelaySettings;
-  targetRelayNode?: string;
   baseWsUrl: string;
   wsFactory: WebSocketFactory;
   publicConnectRelay?: typeof connectRelay;
@@ -565,15 +574,18 @@ async function openEnhancedChannels(params: {
   const usePublic =
     params.relayProfile === "public" && Boolean(params.publicRelaySettings?.relayAddresses?.length);
 
+  let alphaPromise: Promise<RelayChannelConnection>;
+  let betaPromise: Promise<RelayChannelConnection | null> = Promise.resolve(null);
+  let fallbackReasonIfNoBeta: string | undefined;
+  let routeDetailFor: (dualActive: boolean) => string;
+
   if (usePublic && params.publicRelaySettings) {
-    const plan = await resolvePublicDualRelayPlan(
-      params.codephrase,
-      params.publicRelaySettings.relayAddresses,
-    );
+    const publicSettings = params.publicRelaySettings;
+    const plan = await resolvePublicDualRelayPlan(params.codephrase, publicSettings.relayAddresses);
     const connectFn = params.publicConnectRelay ?? connectRelay;
 
-    const alphaPromise = openPublicCrocChannel({
-      publicRelaySettings: params.publicRelaySettings,
+    alphaPromise = openPublicCrocChannel({
+      publicRelaySettings: publicSettings,
       relayIdx: plan.alphaIndex,
       port: plan.alphaPort,
       lane: "alpha",
@@ -582,83 +594,57 @@ async function openEnhancedChannels(params: {
       onClose: params.onClose,
       connectFn,
       signal: params.signal,
-    });
-
-    const betaPromise = params.dualRelay
-      ? openPublicCrocChannel({
-          publicRelaySettings: params.publicRelaySettings,
-          relayIdx: plan.betaIndex,
-          port: plan.betaPort,
-          lane: "beta",
-          room: params.room,
-          onMessage: params.onMessage,
-          onClose: params.onClose,
-          connectFn,
-          signal: params.signal,
-        })
-      : Promise.resolve(null);
-
-    const [alphaRes, betaRes] = await Promise.allSettled([alphaPromise, betaPromise]);
-    if (alphaRes.status === "rejected") {
-      if (betaRes.status === "fulfilled" && betaRes.value) {
-        betaRes.value.close();
-      }
-      const err = alphaRes.reason;
+    }).catch((err) => {
       if (err instanceof DOMException && err.name === "AbortError") throw err;
       const reason = err instanceof Error ? err.message : String(err);
       throw new Error(
         `Không thể kết nối Public Croc Relay (${plan.alphaHost}:${plan.alphaPort}): ${reason}. Nếu mạng chặn cổng TCP 9009–9017, hãy đổi Hồ sơ Relay sang 'Local Dual-Relay Lab'.`,
       );
-    }
+    });
 
-    const alphaConn = alphaRes.value;
-    let betaConn: RelayChannelConnection | null = null;
-    let betaFallbackReason: string | undefined;
-
-    if (params.dualRelay) {
-      if (betaRes.status === "fulfilled" && betaRes.value) {
-        betaConn = betaRes.value;
-      } else if (betaRes.status === "rejected") {
-        betaFallbackReason =
-          betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
-      }
-    }
-
-    const effectiveDualRelay = Boolean(params.dualRelay && betaConn?.alive);
-    const routeDetail = effectiveDualRelay
-      ? `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort} + ${plan.betaHost}:${plan.betaPort})`
-      : `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort})`;
-
-    return { alphaConn, betaConn, effectiveDualRelay, routeDetail, betaFallbackReason };
-  }
-
-  const alphaPromise = openLocalWsChannel({
-    baseWsUrl: params.baseWsUrl,
-    lane: "alpha",
-    room: params.room,
-    role: params.role,
-    targetRelayNode: params.targetRelayNode,
-    wsFactory: params.wsFactory,
-    onMessage: params.onMessage,
-    onPeerCount: params.onPeerCount,
-    onClose: params.onClose,
-    signal: params.signal,
-  });
-
-  const betaPromise = params.dualRelay
-    ? openLocalWsChannel({
-        baseWsUrl: params.baseWsUrl,
+    if (params.dualRelay && plan.dualRelaySupported) {
+      betaPromise = openPublicCrocChannel({
+        publicRelaySettings: publicSettings,
+        relayIdx: plan.betaIndex,
+        port: plan.betaPort,
         lane: "beta",
         room: params.room,
+        onMessage: params.onMessage,
+        onClose: params.onClose,
+        connectFn,
+        signal: params.signal,
+      });
+    } else if (params.dualRelay && !plan.dualRelaySupported) {
+      fallbackReasonIfNoBeta = "Cần tối thiểu 2 Relay Node công cộng khác nhau — tự động thu gọn về Relay Alpha";
+    }
+
+    routeDetailFor = (dualActive) =>
+      dualActive
+        ? `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort} + ${plan.betaHost}:${plan.betaPort})`
+        : `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort})`;
+  } else {
+    const openWsLane = (lane: RelayLane) =>
+      openLocalWsChannel({
+        baseWsUrl: params.baseWsUrl,
+        lane,
+        room: params.room,
         role: params.role,
-        targetRelayNode: params.targetRelayNode,
         wsFactory: params.wsFactory,
         onMessage: params.onMessage,
         onPeerCount: params.onPeerCount,
         onClose: params.onClose,
         signal: params.signal,
-      })
-    : Promise.resolve(null);
+      });
+
+    alphaPromise = openWsLane("alpha");
+    if (params.dualRelay) {
+      betaPromise = openWsLane("beta");
+    }
+    routeDetailFor = () =>
+      isLocalLabProfile(params.relayProfile)
+        ? `Room ${params.room} · Local Dual-Relay Lab (/ws-dual)`
+        : `Room ${params.room}`;
+  }
 
   const [alphaRes, betaRes] = await Promise.allSettled([alphaPromise, betaPromise]);
   if (alphaRes.status === "rejected") {
@@ -670,22 +656,53 @@ async function openEnhancedChannels(params: {
 
   const alphaConn = alphaRes.value;
   let betaConn: RelayChannelConnection | null = null;
-  let betaFallbackReason: string | undefined;
-  if (params.dualRelay) {
-    if (betaRes.status === "fulfilled" && betaRes.value) {
-      betaConn = betaRes.value;
-    } else if (betaRes.status === "rejected") {
-      betaFallbackReason =
-        betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
-    }
+  let betaFallbackReason = fallbackReasonIfNoBeta;
+
+  if (betaRes.status === "fulfilled" && betaRes.value) {
+    betaConn = betaRes.value;
+  } else if (betaRes.status === "rejected") {
+    betaFallbackReason =
+      betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
   }
 
   const effectiveDualRelay = Boolean(params.dualRelay && betaConn?.alive);
-  const routeDetail = isLocalLabProfile(params.relayProfile)
-    ? `Room ${params.room} · Local Dual-Relay Lab (/ws-dual)`
-    : `Room ${params.room}`;
+  return {
+    alphaConn,
+    betaConn,
+    effectiveDualRelay,
+    routeDetail: routeDetailFor(effectiveDualRelay),
+    betaFallbackReason,
+  };
+}
 
-  return { alphaConn, betaConn, effectiveDualRelay, routeDetail, betaFallbackReason };
+function logEnhancedChannelOpened(params: {
+  emitInspector: boolean;
+  dualRequested: boolean;
+  effectiveDualRelay: boolean;
+  routeDetail: string;
+  betaFallbackReason?: string;
+  dualTitle: string;
+  singleTitle: string;
+}) {
+  if (!params.emitInspector) return;
+  if (params.dualRequested && !params.effectiveDualRelay && params.betaFallbackReason) {
+    protocolEventBus.logEvent({
+      kind: "relay",
+      mode: "enhanced",
+      relay: "alpha",
+      title: "Không mở được Relay Beta — chuyển về 1 kênh Relay Alpha",
+      detail: params.betaFallbackReason,
+    });
+  }
+  protocolEventBus.setPakeStep("room", "done");
+  protocolEventBus.logEvent({
+    kind: "relay",
+    mode: "enhanced",
+    relay: "alpha",
+    title: params.effectiveDualRelay ? params.dualTitle : params.singleTitle,
+    detail: params.routeDetail,
+  });
+  protocolEventBus.setPakeStep("pake", "active");
 }
 
 export async function filesToManifestInputs(files: File[]): Promise<ManifestInputFile[]> {
@@ -712,7 +729,6 @@ export async function sendEnhancedTransfer(options: {
   relayProfile?: RelayProfileMode;
   publicRelaySettings?: PublicRelaySettings;
   publicConnectRelay?: typeof connectRelay;
-  targetRelayNode?: string;
   chunkSize?: number;
   baseWsUrl?: string;
   wsFactory?: WebSocketFactory;
@@ -730,7 +746,6 @@ export async function sendEnhancedTransfer(options: {
     relayProfile,
     publicRelaySettings,
     publicConnectRelay,
-    targetRelayNode,
     chunkSize = 64 * 1024,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
@@ -827,7 +842,7 @@ export async function sendEnhancedTransfer(options: {
       betaChunks: snap.betaDelivered,
       failoverChunks: snap.failoverReroutedCount,
       alphaAlive: snap.alphaAlive,
-      betaAlive: snap.betaAlive,
+      betaAlive: snap.dualEnabled ? snap.betaAlive : undefined,
       fileProgress,
     });
   };
@@ -934,7 +949,6 @@ export async function sendEnhancedTransfer(options: {
       relayProfile,
       publicRelaySettings,
       publicConnectRelay,
-      targetRelayNode,
       baseWsUrl,
       wsFactory,
       onMessage: handleMessage,
@@ -947,35 +961,21 @@ export async function sendEnhancedTransfer(options: {
     alphaAlive = Boolean(alphaConn.alive);
     betaAlive = Boolean(betaConn?.alive);
 
-    if (dualRelay && !effectiveDualRelay && opened.betaFallbackReason && emitInspector) {
-      protocolEventBus.logEvent({
-        kind: "relay",
-        mode: "enhanced",
-        relay: "alpha",
-        title: "Không mở được Relay Beta — chuyển về 1 kênh Relay Alpha",
-        detail: opened.betaFallbackReason,
-      });
-    }
-
     onHandleReady?.({
       simulateAlphaDisconnect: () =>
         triggerLaneFailover("alpha", "Người dùng kích hoạt mô phỏng ngắt Relay Alpha"),
       cancel: () => handleAbort(),
     });
 
-    if (emitInspector) {
-      protocolEventBus.setPakeStep("room", "done");
-      protocolEventBus.logEvent({
-        kind: "relay",
-        mode: "enhanced",
-        relay: "alpha",
-        title: effectiveDualRelay
-          ? "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)"
-          : "Đã kết nối Relay Alpha",
-        detail: opened.routeDetail,
-      });
-      protocolEventBus.setPakeStep("pake", "active");
-    }
+    logEnhancedChannelOpened({
+      emitInspector,
+      dualRequested: dualRelay,
+      effectiveDualRelay,
+      routeDetail: opened.routeDetail,
+      betaFallbackReason: opened.betaFallbackReason,
+      dualTitle: "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)",
+      singleTitle: "Đã kết nối Relay Alpha",
+    });
 
     onStatus?.("Đang chờ máy nhận tham gia phòng và bắt tay mã hóa PAKE/ECDH…");
 
@@ -1361,7 +1361,6 @@ export interface EnhancedReceiveParams {
   relayProfile?: RelayProfileMode;
   publicRelaySettings?: PublicRelaySettings;
   publicConnectRelay?: typeof connectRelay;
-  targetRelayNode?: string;
   baseWsUrl?: string;
   wsFactory?: WebSocketFactory;
   cache?: ChunkCacheAdapter;
@@ -1380,7 +1379,6 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     relayProfile,
     publicRelaySettings,
     publicConnectRelay,
-    targetRelayNode,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
     cache = browserIndexedDbCache,
@@ -1486,7 +1484,6 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       relayProfile,
       publicRelaySettings,
       publicConnectRelay,
-      targetRelayNode,
       baseWsUrl,
       wsFactory,
       onMessage: handleMsg,
@@ -1500,29 +1497,15 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     alphaAlive = Boolean(alphaConn.alive);
     betaAlive = Boolean(betaConn?.alive);
 
-    if (dualRelay && !effectiveDualRelay && opened.betaFallbackReason && emitInspector) {
-      protocolEventBus.logEvent({
-        kind: "relay",
-        mode: "enhanced",
-        relay: "alpha",
-        title: "Không mở được Relay Beta — chuyển về 1 kênh Relay Alpha",
-        detail: opened.betaFallbackReason,
-      });
-    }
-
-    if (emitInspector) {
-      protocolEventBus.setPakeStep("room", "done");
-      protocolEventBus.logEvent({
-        kind: "relay",
-        mode: "enhanced",
-        relay: "alpha",
-        title: effectiveDualRelay
-          ? "Đã kết nối song song Relay Alpha & Beta"
-          : "Đã kết nối Relay Alpha",
-        detail: opened.routeDetail,
-      });
-      protocolEventBus.setPakeStep("pake", "active");
-    }
+    logEnhancedChannelOpened({
+      emitInspector,
+      dualRequested: dualRelay,
+      effectiveDualRelay,
+      routeDetail: opened.routeDetail,
+      betaFallbackReason: opened.betaFallbackReason,
+      dualTitle: "Đã kết nối song song Relay Alpha & Beta",
+      singleTitle: "Đã kết nối Relay Alpha",
+    });
 
     onStatus?.("Đang khởi tạo trao đổi khóa ECDH P-256 + HKDF-SHA-256…");
     const myKeyPair = await crypto.subtle.generateKey(
@@ -1818,7 +1801,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         betaChunks: betaReceived,
         failoverChunks: failoverReceived,
         alphaAlive: Boolean(alphaConn?.alive),
-        betaAlive: Boolean(betaConn?.alive),
+        betaAlive: effectiveDualRelay ? Boolean(betaConn?.alive) : undefined,
         fileProgress,
       });
 

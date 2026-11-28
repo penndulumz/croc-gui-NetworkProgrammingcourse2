@@ -108,6 +108,26 @@ export async function probePublicRelays(
   return latencies;
 }
 
+export function extractRelayHost(address: string): string {
+  const lastColon = address.lastIndexOf(":");
+  return lastColon > 0 ? address.slice(0, lastColon) : address;
+}
+
+function lookupRelayRtt(
+  latencies: Record<string, number | null>,
+  relayAddresses: string[],
+  idx: number,
+): number | null {
+  const addr = relayAddresses[idx];
+  const host = addr ? extractRelayHost(addr) : undefined;
+  const rtt =
+    (addr ? latencies[addr] : undefined) ??
+    (host ? latencies[host] : undefined) ??
+    latencies[String(idx)] ??
+    latencies[`public-${idx}`];
+  return typeof rtt === "number" && Number.isFinite(rtt) && rtt >= 0 ? rtt : null;
+}
+
 export function findFastestRelay(
   latencies: Record<string, number | null>,
   relayAddresses: string[],
@@ -119,20 +139,11 @@ export function findFastestRelay(
   let fastest: { index: number; host: string; rttMs: number } | null = null;
 
   for (let idx = 0; idx < relayAddresses.length; idx++) {
-    const addr = relayAddresses[idx];
-    const lastColon = addr.lastIndexOf(":");
-    const host = lastColon > 0 ? addr.slice(0, lastColon) : addr;
+    const host = extractRelayHost(relayAddresses[idx]);
+    const rtt = lookupRelayRtt(latencies, relayAddresses, idx);
 
-    const rtt =
-      latencies[addr] ??
-      latencies[host] ??
-      latencies[String(idx)] ??
-      latencies[`public-${idx}`];
-
-    if (typeof rtt === "number" && Number.isFinite(rtt) && rtt >= 0) {
-      if (!fastest || rtt < fastest.rttMs) {
-        fastest = { index: idx, host, rttMs: rtt };
-      }
+    if (rtt !== null && (!fastest || rtt < fastest.rttMs)) {
+      fastest = { index: idx, host, rttMs: rtt };
     }
   }
 
@@ -155,19 +166,9 @@ export function resolveStreamPairRtts(params: {
       betaRttMs: typeof b === "number" ? b : null,
     };
   }
-  const lookup = (idx: number): number | null => {
-    const addr = relayAddresses[idx];
-    const host = addr ? (addr.lastIndexOf(":") > 0 ? addr.slice(0, addr.lastIndexOf(":")) : addr) : undefined;
-    const v =
-      (addr ? latencies[addr] : undefined) ??
-      (host ? latencies[host] : undefined) ??
-      latencies[String(idx)] ??
-      latencies[`public-${idx}`];
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
-  };
   return {
-    alphaRttMs: lookup(alphaIndex),
-    betaRttMs: lookup(betaIndex),
+    alphaRttMs: lookupRelayRtt(latencies, relayAddresses, alphaIndex),
+    betaRttMs: lookupRelayRtt(latencies, relayAddresses, betaIndex),
   };
 }
 

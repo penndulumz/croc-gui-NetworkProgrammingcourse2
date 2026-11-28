@@ -107,3 +107,23 @@ test("DualRelayScheduler reroutes remaining and in-flight odd chunks to Alpha on
   assert.equal(snap.alphaAlive, true);
   assert.equal(snap.failoverReroutedCount, 2);
 });
+
+test("markRemainingDelivered reconciles in-flight/pending chunks cleanly on trailing completion", () => {
+  const scheduler = new DualRelayScheduler([0, 1, 2, 3], true);
+  const c0 = scheduler.nextForLane("alpha");
+  const c1 = scheduler.nextForLane("beta");
+  assert.equal(c0?.globalIndex, 0);
+  assert.equal(c1?.globalIndex, 1);
+
+  scheduler.markDelivered(0, "alpha");
+  assert.equal(scheduler.isComplete(), false);
+
+  const finalized = scheduler.markRemainingDelivered();
+  assert.deepEqual(finalized.map((c) => c.globalIndex).sort((a, b) => a - b), [1, 2, 3]);
+  assert.equal(scheduler.isComplete(), true);
+  assert.equal(scheduler.inFlightCountForLane("beta"), 0);
+  const snap = scheduler.getSnapshot();
+  assert.equal(snap.deliveredCount, 4);
+  assert.equal(snap.alphaDelivered, 2);
+  assert.equal(snap.betaDelivered, 2);
+});
