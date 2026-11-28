@@ -849,10 +849,9 @@ export async function sendEnhancedTransfer(options: {
 
   const triggerLaneFailover = (failedLane: RelayLane, reason: string) => {
     if (failedLane === "alpha") {
-      if (!alphaAlive) return;
+      if (!alphaAlive || !effectiveDualRelay || !betaConn?.alive) return;
       alphaAlive = false;
       alphaConn?.close();
-      if (!effectiveDualRelay || !betaConn?.alive) return;
       const rerouted = scheduler?.triggerAlphaFailover() ?? [];
       if (emitInspector) {
         for (const idx of rerouted) {
@@ -872,10 +871,9 @@ export async function sendEnhancedTransfer(options: {
       return;
     }
 
-    if (!betaAlive) return;
+    if (!betaAlive || !effectiveDualRelay || !alphaConn?.alive) return;
     betaAlive = false;
     betaConn?.close();
-    if (!effectiveDualRelay || !alphaConn?.alive) return;
     const rerouted = scheduler?.triggerBetaFailover() ?? [];
     if (emitInspector) {
       for (const idx of rerouted) {

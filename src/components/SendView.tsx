@@ -130,6 +130,10 @@ export function SendView({
 
   const targetFastestRelayRef = useRef(targetFastestRelay);
   targetFastestRelayRef.current = targetFastestRelay;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const codeGenSeqRef = useRef(0);
+  const userEditedCodeRef = useRef(false);
 
   const fastestProbedRelay = useMemo(() => {
     const relayAddresses = bridgeConfig?.relayAddresses ?? [];
@@ -139,6 +143,10 @@ export function SendView({
 
   const autoGenerateCode = useCallback(
     async (targetMode: SendMode = mode) => {
+      const seq = ++codeGenSeqRef.current;
+      const isStale = () =>
+        codeGenSeqRef.current !== seq || busyRef.current || userEditedCodeRef.current;
+
       const relayAddresses = bridgeConfig?.relayAddresses ?? [];
       const shouldOptimizePublic =
         !isLocalLabProfile(relayProfile) &&
@@ -155,16 +163,19 @@ export function SendView({
             // Ignore probe errors
           }
         }
+        if (isStale()) return;
         if (fastest) {
           const optimized = await generateOptimizedCodephrase(
             fastest.index,
             relayAddresses.length,
           );
+          if (isStale()) return;
           setCodephrase(optimized);
           setOptimizedRelay(fastest);
           return;
         }
       }
+      if (isStale()) return;
       setOptimizedRelay(null);
       setCodephrase(generateCode());
     },
@@ -173,12 +184,16 @@ export function SendView({
 
   useEffect(() => {
     if (prefillCode) {
+      codeGenSeqRef.current += 1;
+      userEditedCodeRef.current = true;
       setCodephrase(prefillCode);
       setOptimizedRelay(null);
       onClearPrefill?.();
       return;
     }
-    void autoGenerateCode();
+    if (!userEditedCodeRef.current && !busyRef.current) {
+      void autoGenerateCode();
+    }
   }, [prefillCode, onClearPrefill, autoGenerateCode]);
 
   useEffect(() => {
@@ -212,6 +227,7 @@ export function SendView({
   };
 
   const regenerateCode = () => {
+    userEditedCodeRef.current = false;
     void autoGenerateCode();
   };
 
@@ -814,6 +830,8 @@ export function SendView({
                   value={codephrase}
                   disabled={busy}
                   onChange={(e) => {
+                    codeGenSeqRef.current += 1;
+                    userEditedCodeRef.current = true;
                     setCodephrase(e.target.value);
                     setOptimizedRelay(null);
                   }}
@@ -964,7 +982,7 @@ export function SendView({
                 <X className="h-4 w-4" aria-hidden="true" />
                 {t.send.cancelBtn}
               </button>
-              {mode === "enhanced" && dualRelay && (!enhProgress || (enhProgress.alphaAlive && (enhProgress.betaAlive ?? true))) && (
+              {mode === "enhanced" && dualRelay && (!enhProgress || (enhProgress.alphaAlive && enhProgress.betaAlive === true)) && (
                 <button
                   type="button"
                   onClick={handleSimulateAlphaDisconnect}
