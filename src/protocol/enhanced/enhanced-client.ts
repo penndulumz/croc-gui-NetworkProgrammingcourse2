@@ -14,6 +14,9 @@ import { protocolEventBus } from "../event-bus";
 import { calculateManifestFileProgress, type FileProgress } from "../../lib/metrics";
 import { bridgeWsURL } from "../../lib/bridge-origin";
 import { relayIndex } from "../croc/codephrase";
+import { randomBytes } from "../croc/bytes";
+import { confirmPeerKey, derivePeerKeys } from "../croc/key";
+import { Pake } from "../croc/pake";
 import { connectRelay, controlPort } from "../croc/relay";
 import type { CrocSocket } from "../croc/transport";
 import {
@@ -119,9 +122,15 @@ export interface EnhancedReceiveResult {
 }
 
 type WirePlainMessage =
-  | { type: "pake-init"; pubKeyB64: string; saltB64: string }
-  | { type: "pake-reply"; pubKeyB64: string; confirmB64: string }
-  | { type: "pake-confirm"; confirmB64: string }
+  | { type: "pake-init"; sessionId: string; pakeB64: string }
+  | {
+      type: "pake-reply";
+      sessionId: string;
+      pakeB64: string;
+      saltB64: string;
+      confirmB64: string;
+    }
+  | { type: "pake-confirm"; sessionId: string; confirmB64: string }
   | { type: "encrypted"; ivB64: string; ctB64: string }
   | { type: "peer_count"; channel: RelayLane; roomId: string; count: number };
 
@@ -171,15 +180,6 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.byteLength !== b.byteLength) return false;
-  let diff = 0;
-  for (let i = 0; i < a.byteLength; i += 1) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff === 0;
-}
-
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(u8.byteLength);
   copy.set(u8);
@@ -191,48 +191,14 @@ export async function deriveEnhancedRoom(codephrase: string): Promise<string> {
   return `cf-${digest.slice(0, 20)}`;
 }
 
-async function deriveSessionKeys(params: {
-  ecdhSharedSecret: Uint8Array;
-  codephrase: string;
-  room: string;
-  salt: Uint8Array;
-}): Promise<{
-  aesKey: CryptoKey;
-  confirmSender: Uint8Array;
-  confirmReceiver: Uint8Array;
-}> {
-  const combined = new Uint8Array(params.ecdhSharedSecret.byteLength + enc.encode(params.codephrase).byteLength);
-  combined.set(params.ecdhSharedSecret, 0);
-  combined.set(enc.encode(params.codephrase), params.ecdhSharedSecret.byteLength);
-
-  const ikm = await crypto.subtle.importKey("raw", toArrayBuffer(combined), "HKDF", false, [
-    "deriveBits",
-  ]);
-  const bits = new Uint8Array(
-    await crypto.subtle.deriveBits(
-      {
-        name: "HKDF",
-        hash: "SHA-256",
-        salt: toArrayBuffer(params.salt),
-        info: toArrayBuffer(enc.encode(`crocflow-enhanced-v1::${params.room}`)),
-      },
-      ikm,
-      (32 + 32 + 32) * 8,
-    ),
-  );
-
-  const aesRaw = bits.subarray(0, 32);
-  const confirmSender = bits.subarray(32, 64);
-  const confirmReceiver = bits.subarray(64, 96);
-
-  const aesKey = await crypto.subtle.importKey(
+async function importAesGcmKey(rawKey: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
     "raw",
-    toArrayBuffer(aesRaw),
+    toArrayBuffer(rawKey),
     { name: "AES-GCM" },
     false,
     ["encrypt", "decrypt"],
   );
-  return { aesKey, confirmSender, confirmReceiver };
 }
 
 async function encryptPayload(aesKey: CryptoKey, payload: DecryptedPayload): Promise<WirePlainMessage> {
@@ -350,7 +316,8 @@ export async function resolvePublicDualRelayPlan(
   if (relayAddresses.length === 0) {
     throw new Error("Chưa có cấu hình Relay Croc công cộng.");
   }
-  const alphaIndex = await relayIndex(codephrase, relayAddresses.length);
+  const normalizedCode = codephrase.trim();
+  const alphaIndex = await relayIndex(normalizedCode, relayAddresses.length);
   const dualRelaySupported = relayAddresses.length >= 2;
   const betaIndex = dualRelaySupported ? (alphaIndex + 1) % relayAddresses.length : alphaIndex;
   const alphaAddr = relayAddresses[alphaIndex];
@@ -383,6 +350,7 @@ export async function prepareEnhancedRelayContext(params: {
   streamPairRtts: { alphaRttMs: number | null; betaRttMs: number | null };
 }> {
   const { codephrase, relayProfile, bridgeConfig, latencies } = params;
+  const normalizedCode = codephrase.trim();
   if (isLocalLabProfile(relayProfile)) {
     return {
       streamPairRtts: resolveStreamPairRtts({ relayProfile, latencies }),
@@ -391,7 +359,7 @@ export async function prepareEnhancedRelayContext(params: {
   if (!bridgeConfig || bridgeConfig.relayAddresses.length === 0) {
     throw new Error("Bridge Server chưa sẵn sàng danh sách Relay Croc công cộng.");
   }
-  const plan = await resolvePublicDualRelayPlan(codephrase, bridgeConfig.relayAddresses);
+  const plan = await resolvePublicDualRelayPlan(normalizedCode, bridgeConfig.relayAddresses);
   return {
     publicRelaySettings: {
       bridgeURL: bridgeWsURL("/ws"),
@@ -539,8 +507,16 @@ async function openPublicCrocChannel(params: {
     params.signal,
   );
 
-  // Tuần tự hóa hàng đợi ghi socket và cung cấp flush() tường minh trước khi đóng kết nối
+  // Tuần tự hóa hàng đợi ghi socket và cung cấp flush() tường minh trước khi đóng kết nối.
+  // Đồng thời gửi ping giữ kết nối Croc `[1]` mỗi 15 giây để tránh NAT/proxy ngắt kết nối nhàn rỗi.
   let sendChain: Promise<void> = Promise.resolve();
+  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+  const clearKeepalive = () => {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = undefined;
+    }
+  };
   const conn: RelayChannelConnection = {
     lane: params.lane,
     alive: true,
@@ -554,15 +530,28 @@ async function openPublicCrocChannel(params: {
         .catch(() => {
           const wasAlive = conn.alive;
           conn.alive = false;
+          clearKeepalive();
           if (wasAlive) params.onClose(params.lane);
         });
     },
     flush: () => sendChain,
     close: () => {
       conn.alive = false;
+      clearKeepalive();
       socket.close();
     },
   };
+
+  keepaliveTimer = setInterval(() => {
+    if (!conn.alive) {
+      clearKeepalive();
+      return;
+    }
+    sendChain = sendChain
+      .then(() => socket.send(new Uint8Array([1])))
+      .catch(() => undefined);
+  }, 15_000);
+  (keepaliveTimer as unknown as { unref?: () => void }).unref?.();
 
   void (async () => {
     try {
@@ -577,6 +566,7 @@ async function openPublicCrocChannel(params: {
     } finally {
       const wasAlive = conn.alive;
       conn.alive = false;
+      clearKeepalive();
       if (wasAlive) {
         params.onClose(params.lane);
       }
@@ -803,9 +793,10 @@ export async function sendEnhancedTransfer(options: {
   } = options;
 
   const startedAt = Date.now();
+  const normalizedCodephrase = codephrase.trim();
   onStatus?.("Đang lập Folder Manifest và tính mã băm SHA-256 cho từng Chunk…");
   const manifest = await buildFolderManifest(files, chunkSize);
-  const room = await deriveEnhancedRoom(codephrase);
+  const room = await deriveEnhancedRoom(normalizedCodephrase);
 
   if (emitInspector) {
     protocolEventBus.startSession({
@@ -972,13 +963,13 @@ export async function sendEnhancedTransfer(options: {
     };
     const handleClose = (lane: RelayLane) => {
       if (lane === "alpha") {
-        if (effectiveDualRelay && betaConn?.alive) {
+        if (scheduler && effectiveDualRelay && betaConn?.alive) {
           triggerLaneFailover("alpha", "Phát hiện đóng socket trên Relay Alpha");
         } else {
           alphaAlive = false;
         }
       } else if (lane === "beta") {
-        if (effectiveDualRelay && alphaConn?.alive) {
+        if (scheduler && effectiveDualRelay && alphaConn?.alive) {
           triggerLaneFailover("beta", "Phát hiện đóng socket trên Relay Beta");
         } else {
           betaAlive = false;
@@ -995,7 +986,7 @@ export async function sendEnhancedTransfer(options: {
     const opened = await openEnhancedChannels({
       room,
       role: "sender",
-      codephrase,
+      codephrase: normalizedCodephrase,
       dualRelay,
       relayProfile,
       publicRelaySettings,
@@ -1030,7 +1021,24 @@ export async function sendEnhancedTransfer(options: {
 
     onStatus?.("Đang chờ máy nhận tham gia phòng và bắt tay mã hóa PAKE/ECDH…");
 
-    // Wait for receiver's pake-init on either channel
+    // Gửi gói bắt tay/điều khiển trên mọi kênh còn sống để tránh tắc nghẽn nếu 1 lane bị kẹt hoặc mất đối tác
+    const broadcastControlMsg = (msg: WirePlainMessage) => {
+      let sent = 0;
+      for (const conn of [alphaConn, betaConn]) {
+        if (!conn?.alive) continue;
+        try {
+          conn.sendJson(msg);
+          sent += 1;
+        } catch {
+          // Ignore single-lane send failure if another lane is alive
+        }
+      }
+      if (sent === 0) {
+        throw new Error("Không còn kênh Relay hoạt động để gửi gói điều khiển");
+      }
+    };
+
+    // Chờ pake-init (SPAKE2 P-256) từ máy nhận trên bất kỳ kênh nào (Alpha hoặc Beta)
     let initMsg: Extract<WirePlainMessage, { type: "pake-init" }> | null = null;
     while (!initMsg) {
       const next = await incoming.next();
@@ -1039,71 +1047,66 @@ export async function sendEnhancedTransfer(options: {
       }
     }
 
-    const myKeyPair = await crypto.subtle.generateKey(
-      { name: "ECDH", namedCurve: "P-256" },
-      true,
-      ["deriveBits"],
-    );
-    const peerPub = await crypto.subtle.importKey(
-      "raw",
-      toArrayBuffer(base64ToBytes(initMsg.pubKeyB64)),
-      { name: "ECDH", namedCurve: "P-256" },
-      false,
-      [],
-    );
-    const sharedBits = new Uint8Array(
-      await crypto.subtle.deriveBits(
-        { name: "ECDH", public: peerPub },
-        myKeyPair.privateKey,
-        256,
-      ),
-    );
-    const myPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", myKeyPair.publicKey));
-    const salt = base64ToBytes(initMsg.saltB64);
+    const initBytes = base64ToBytes(initMsg.pakeB64);
+    const pake = new Pake(enc.encode(normalizedCodephrase), 1, "p256", "peer-transfer", room);
+    let finished: Awaited<ReturnType<Pake["update"]>>;
+    try {
+      finished = await pake.update(initBytes);
+    } finally {
+      pake.release();
+    }
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("pake", "done");
       protocolEventBus.setPakeStep("hkdf", "active");
     }
 
-    const keys = await deriveSessionKeys({
-      ecdhSharedSecret: sharedBits,
-      codephrase,
-      room,
+    const salt = randomBytes(32);
+    const peerKeys = await derivePeerKeys(
+      finished.key,
       salt,
-    });
+      "peer-transfer",
+      room,
+      "p256",
+      initBytes,
+      finished.bytes,
+    );
+    const keys = {
+      aesKey: await importAesGcmKey(peerKeys.key),
+      confirmationA: peerKeys.confirmationA,
+      confirmationB: peerKeys.confirmationB,
+    };
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("hkdf", "done");
       protocolEventBus.setPakeStep("confirm", "active");
     }
 
-    const sendControlMsg = (msg: WirePlainMessage) => {
-      if (alphaConn?.alive) alphaConn.sendJson(msg);
-      else if (betaConn?.alive) betaConn.sendJson(msg);
-      else throw new Error("Không còn kênh Relay hoạt động để gửi gói điều khiển");
-    };
-
-    // Tạo sẵn thông điệp pake-reply dùng một bộ khóa ECDH duy nhất để phát lại idempotent khi cần
+    // Tạo sẵn thông điệp pake-reply dùng một bộ khóa PAKE duy nhất để phát lại idempotent trên mọi kênh sống
     const pakeReplyMsg: WirePlainMessage = {
       type: "pake-reply",
-      pubKeyB64: bytesToBase64(myPubRaw),
-      confirmB64: bytesToBase64(keys.confirmSender),
+      sessionId: initMsg.sessionId,
+      pakeB64: bytesToBase64(finished.bytes),
+      saltB64: bytesToBase64(salt),
+      confirmB64: bytesToBase64(keys.confirmationB),
     };
-    sendControlMsg(pakeReplyMsg);
+    broadcastControlMsg(pakeReplyMsg);
 
-    // Chờ pake-confirm từ máy nhận; nếu máy nhận gửi lặp pake-init (chu kỳ 350ms) trước khi kịp nhận
-    // pake-reply, máy gửi phát lại chính xác pakeReplyMsg đó (idempotent) thay vì tạo khóa ECDH mới.
+    // Chờ pake-confirm từ máy nhận; nếu máy nhận gửi lặp pake-init cùng sessionId trước khi kịp nhận
+    // pake-reply, máy gửi phát lại chính xác pakeReplyMsg đó (idempotent) trên các kênh còn sống.
     let confirmMsg: Extract<WirePlainMessage, { type: "pake-confirm" }> | null = null;
     while (!confirmMsg) {
       const next = await incoming.next();
-      if (next.msg.type === "pake-confirm") {
+      if (next.msg.type === "pake-confirm" && next.msg.sessionId === initMsg.sessionId) {
         confirmMsg = next.msg;
-      } else if (next.msg.type === "pake-init" && next.msg.pubKeyB64 === initMsg.pubKeyB64) {
-        sendControlMsg(pakeReplyMsg);
+      } else if (
+        next.msg.type === "pake-init" &&
+        next.msg.sessionId === initMsg.sessionId
+      ) {
+        broadcastControlMsg(pakeReplyMsg);
       }
     }
-    if (!bytesEqual(base64ToBytes(confirmMsg.confirmB64), keys.confirmReceiver)) {
+    if (!confirmPeerKey(keys.confirmationA, base64ToBytes(confirmMsg.confirmB64))) {
       throw new Error("Xác thực mã bí mật thất bại — máy nhận nhập sai Codephrase");
     }
 
@@ -1113,14 +1116,14 @@ export async function sendEnhancedTransfer(options: {
       protocolEventBus.logEvent({
         kind: "pake",
         mode: "enhanced",
-        title: "Bắt tay ECDH P-256 + HKDF-SHA-256 + AES-256-GCM thành công",
-        detail: "Cả hai bên đã xác nhận khớp Codephrase; khóa AES-256-GCM đã sẵn sàng",
+        title: "Bắt tay PAKE v2 (SPAKE2 P-256) + HKDF-SHA-256 + AES-256-GCM thành công",
+        detail: "Cả hai bên đã xác thực mật khẩu 2 chiều; khóa AES-256-GCM đã sẵn sàng",
       });
     }
 
-    // Gửi Folder Manifest đã mã hóa, quảng bá khả năng Dual-Relay (`effectiveDualRelay`) để thương lượng
+    // Gửi Folder Manifest đã mã hóa trên mọi kênh còn sống để tránh nghẽn nếu một kênh lỗi ghép cặp
     onStatus?.("Đang gửi Folder Manifest đã mã hóa cho máy nhận…");
-    sendControlMsg(
+    broadcastControlMsg(
       await encryptPayload(keys.aesKey, {
         kind: "manifest",
         manifest,
@@ -1454,7 +1457,8 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   } = options;
 
   const startedAt = Date.now();
-  const room = await deriveEnhancedRoom(codephrase);
+  const normalizedCodephrase = codephrase.trim();
+  const room = await deriveEnhancedRoom(normalizedCodephrase);
 
   if (emitInspector) {
     protocolEventBus.startSession({
@@ -1472,13 +1476,15 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   let betaAlive = false;
   let sessionKeys: {
     aesKey: CryptoKey;
-    confirmSender: Uint8Array;
-    confirmReceiver: Uint8Array;
+    confirmationA: Uint8Array;
+    confirmationB: Uint8Array;
   } | null = null;
   let transferComplete = false;
   let gotPakeReply = false;
   let sendPakeInitFn: (() => void) | null = null;
   let pakeRetryTimer: ReturnType<typeof setInterval> | undefined;
+  let confirmRetryTimer: ReturnType<typeof setInterval> | undefined;
+  let pakeInstance: Pake | null = null;
 
   const controller = new AbortController();
   const handleAbort = () => {
@@ -1487,6 +1493,12 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       clearInterval(pakeRetryTimer);
       pakeRetryTimer = undefined;
     }
+    if (confirmRetryTimer) {
+      clearInterval(confirmRetryTimer);
+      confirmRetryTimer = undefined;
+    }
+    pakeInstance?.release();
+    pakeInstance = null;
     alphaConn?.close();
     betaConn?.close();
     incoming.close(new DOMException("Đã hủy nhận dữ liệu", "AbortError"));
@@ -1546,7 +1558,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     const opened = await openEnhancedChannels({
       room,
       role: "receiver",
-      codephrase,
+      codephrase: normalizedCodephrase,
       dualRelay,
       relayProfile,
       publicRelaySettings,
@@ -1574,14 +1586,11 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       singleTitle: "Đã kết nối Relay Alpha",
     });
 
-    onStatus?.("Đang khởi tạo trao đổi khóa ECDH P-256 + HKDF-SHA-256…");
-    const myKeyPair = await crypto.subtle.generateKey(
-      { name: "ECDH", namedCurve: "P-256" },
-      true,
-      ["deriveBits"],
-    );
-    const myPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", myKeyPair.publicKey));
-    const salt = crypto.getRandomValues(new Uint8Array(32));
+    onStatus?.("Đang khởi tạo trao đổi khóa PAKE v2 (SPAKE2 P-256) + HKDF-SHA-256…");
+    const sessionId = bytesToBase64(randomBytes(12));
+    const pake = new Pake(enc.encode(normalizedCodephrase), 0, "p256", "peer-transfer", room);
+    pakeInstance = pake;
+    const pakeInitBytes = pake.bytes();
 
     const sendControlMsg = (msg: WirePlainMessage, preferredLane?: RelayLane) => {
       if (preferredLane === "beta" && betaConn?.alive) {
@@ -1597,20 +1606,36 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       }
     };
 
-    // Bắt tay PAKE idempotent từ phía máy nhận (hỗ trợ Receiver-first join trên Relay không đệm tin):
-    // Gửi cùng một `pakeInitMsg` ngay khi mở kênh, khi nhận `peer_count >= 2`, và lặp mỗi 350ms
-    // (`PAKE_INIT_RETRY_MS`) cho tới khi nhận được `pake-reply` hoặc AbortSignal hủy phiên.
+    const broadcastControlMsg = (msg: WirePlainMessage) => {
+      let sent = 0;
+      for (const conn of [alphaConn, betaConn]) {
+        if (!conn?.alive) continue;
+        try {
+          conn.sendJson(msg);
+          sent += 1;
+        } catch {
+          // Ignore single-lane send failure if another lane is alive
+        }
+      }
+      if (sent === 0) {
+        throw new Error("Không còn kênh Relay hoạt động");
+      }
+    };
+
+    // Bắt tay PAKE idempotent từ phía máy nhận (hỗ trợ Receiver-first join và Dual-Lane fallback):
+    // Gửi cùng một `pakeInitMsg` trên mọi kênh đang sống ngay khi mở kênh, khi nhận `peer_count >= 2`,
+    // và lặp mỗi 350ms (`PAKE_INIT_RETRY_MS`) cho tới khi nhận được `pake-reply` khớp `sessionId`.
     const pakeInitMsg: WirePlainMessage = {
       type: "pake-init",
-      pubKeyB64: bytesToBase64(myPubRaw),
-      saltB64: bytesToBase64(salt),
+      sessionId,
+      pakeB64: bytesToBase64(pakeInitBytes),
     };
     sendPakeInitFn = () => {
       if (gotPakeReply || controller.signal.aborted) return;
       try {
-        sendControlMsg(pakeInitMsg);
+        broadcastControlMsg(pakeInitMsg);
       } catch {
-        // Ignore if channel closed while retrying
+        // Ignore if channels closed while retrying
       }
     };
 
@@ -1623,7 +1648,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     try {
       while (!replyMsg) {
         const next = await incoming.next();
-        if (next.msg.type === "pake-reply") {
+        if (next.msg.type === "pake-reply" && next.msg.sessionId === sessionId) {
           gotPakeReply = true;
           replyMsg = next.msg;
         }
@@ -1636,32 +1661,35 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       sendPakeInitFn = null;
     }
 
-    const peerPub = await crypto.subtle.importKey(
-      "raw",
-      toArrayBuffer(base64ToBytes(replyMsg.pubKeyB64)),
-      { name: "ECDH", namedCurve: "P-256" },
-      false,
-      [],
-    );
-    const sharedBits = new Uint8Array(
-      await crypto.subtle.deriveBits(
-        { name: "ECDH", public: peerPub },
-        myKeyPair.privateKey,
-        256,
-      ),
-    );
+    const replyBytes = base64ToBytes(replyMsg.pakeB64);
+    const salt = base64ToBytes(replyMsg.saltB64);
+    let finished: Awaited<ReturnType<Pake["update"]>>;
+    try {
+      finished = await pake.update(replyBytes);
+    } finally {
+      pake.release();
+      pakeInstance = null;
+    }
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("pake", "done");
       protocolEventBus.setPakeStep("hkdf", "active");
     }
 
-    const keys = await deriveSessionKeys({
-      ecdhSharedSecret: sharedBits,
-      codephrase,
-      room,
+    const peerKeys = await derivePeerKeys(
+      finished.key,
       salt,
-    });
+      "peer-transfer",
+      room,
+      "p256",
+      pakeInitBytes,
+      replyBytes,
+    );
+    const keys = {
+      aesKey: await importAesGcmKey(peerKeys.key),
+      confirmationA: peerKeys.confirmationA,
+      confirmationB: peerKeys.confirmationB,
+    };
     sessionKeys = keys;
 
     if (emitInspector) {
@@ -1669,14 +1697,16 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       protocolEventBus.setPakeStep("confirm", "active");
     }
 
-    if (!bytesEqual(base64ToBytes(replyMsg.confirmB64), keys.confirmSender)) {
+    if (!confirmPeerKey(keys.confirmationB, base64ToBytes(replyMsg.confirmB64))) {
       throw new Error("Mã bí mật không khớp với người gửi — phiên bị hủy để bảo vệ dữ liệu");
     }
 
-    sendControlMsg({
+    const pakeConfirmMsg: WirePlainMessage = {
       type: "pake-confirm",
-      confirmB64: bytesToBase64(keys.confirmReceiver),
-    });
+      sessionId,
+      confirmB64: bytesToBase64(keys.confirmationA),
+    };
+    broadcastControlMsg(pakeConfirmMsg);
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("confirm", "done");
@@ -1686,16 +1716,31 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     onStatus?.("Đang nhận Folder Manifest từ máy gửi…");
     let manifest: FolderManifest | null = null;
     let senderDualRelay = effectiveDualRelay;
-    while (!manifest) {
-      const next = await incoming.next();
-      if (next.msg.type === "encrypted") {
-        const decMsg = await decryptPayload(keys.aesKey, next.msg);
-        if (decMsg.kind === "manifest") {
-          manifest = decMsg.manifest;
-          senderDualRelay = Boolean(decMsg.dualRelay);
-        } else if (decMsg.kind === "error") {
-          throw new Error(decMsg.message);
+    confirmRetryTimer = setInterval(() => {
+      if (manifest || controller.signal.aborted) return;
+      try {
+        broadcastControlMsg(pakeConfirmMsg);
+      } catch {
+        // Ignore if channels closed while retrying
+      }
+    }, PAKE_INIT_RETRY_MS);
+    try {
+      while (!manifest) {
+        const next = await incoming.next();
+        if (next.msg.type === "encrypted") {
+          const decMsg = await decryptPayload(keys.aesKey, next.msg);
+          if (decMsg.kind === "manifest") {
+            manifest = decMsg.manifest;
+            senderDualRelay = Boolean(decMsg.dualRelay);
+          } else if (decMsg.kind === "error") {
+            throw new Error(decMsg.message);
+          }
         }
+      }
+    } finally {
+      if (confirmRetryTimer) {
+        clearInterval(confirmRetryTimer);
+        confirmRetryTimer = undefined;
       }
     }
 
@@ -1722,7 +1767,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     if (onManifestOffer) {
       const accepted = await onManifestOffer(manifest, resumePlan);
       if (!accepted) {
-        sendControlMsg(
+        broadcastControlMsg(
           await encryptPayload(keys.aesKey, {
             kind: "error",
             message: "Người nhận đã từ chối tệp",
@@ -1748,7 +1793,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       .filter((c) => !chunkBuffers.has(c.globalIndex))
       .map((c) => c.globalIndex);
 
-    sendControlMsg(
+    broadcastControlMsg(
       await encryptPayload(keys.aesKey, {
         kind: "resume-plan",
         missingIndices,
@@ -1973,6 +2018,12 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       clearInterval(pakeRetryTimer);
       pakeRetryTimer = undefined;
     }
+    if (confirmRetryTimer) {
+      clearInterval(confirmRetryTimer);
+      confirmRetryTimer = undefined;
+    }
+    pakeInstance?.release();
+    pakeInstance = null;
     signal?.removeEventListener("abort", handleAbort);
     alphaConn?.close();
     betaConn?.close();

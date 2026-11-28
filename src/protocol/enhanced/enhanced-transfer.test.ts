@@ -819,3 +819,206 @@ test("Enhanced Dual-Relay with relayProfile='public' and 1 relay narrows to sing
   assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
   assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
 });
+
+test("Enhanced Dual-Relay completes SPAKE2 PAKE over Beta when Alpha closes/stalls during handshake", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+
+    // Drop all PAKE/control traffic on Sender's Alpha channel and close Alpha during handshake
+    const brokenAlphaSenderWsFactory = (url: string): WebSocketLike => {
+      const ws = nodeWsFactory(url);
+      if (url.includes("channel=alpha") && url.includes("role=sender")) {
+        const origSend = ws.send.bind(ws);
+        ws.send = (data) => {
+          if (typeof data === "string" && data.includes("pake-")) {
+            ws.close(4002, "Alpha died during PAKE");
+            return;
+          }
+          origSend(data);
+        };
+        setTimeout(() => {
+          try {
+            ws.close(4002, "Alpha died during PAKE");
+          } catch {}
+        }, 30);
+      }
+      return ws;
+    };
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-pake-beta-fallback",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    recvPromise.catch(() => {});
+
+    await new Promise((r) => setTimeout(r, 60));
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-pake-beta-fallback",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: brokenAlphaSenderWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+    sendPromise.catch(() => {});
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("PAKE Beta fallback timed out")), 3000),
+      ),
+    ]);
+
+    assert.equal(sendRes.alphaDelivered, 0);
+    assert.equal(sendRes.betaDelivered, 7);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
+test("Enhanced Dual-Relay recovers if initial pake-confirm is dropped before reaching Sender", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+    let droppedConfirmCount = 0;
+
+    // Drop the very first `pake-confirm` on Sender side (both lanes) to test Receiver's confirm retry
+    const dropFirstConfirmWsFactory = (url: string): WebSocketLike => {
+      const ws = nodeWsFactory(url);
+      if (url.includes("role=sender")) {
+        const protoDesc =
+          Object.getOwnPropertyDescriptor(ws, "onmessage") ??
+          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ws), "onmessage");
+        let wrappedHandler: ((ev: { data: unknown }) => void) | null = null;
+        Object.defineProperty(ws, "onmessage", {
+          configurable: true,
+          get: () => wrappedHandler,
+          set: (fn) => {
+            wrappedHandler = (ev: { data: unknown }) => {
+              const txt = typeof ev.data === "string" ? ev.data : "";
+              if (txt.includes('"type":"pake-confirm"') && droppedConfirmCount < 2) {
+                droppedConfirmCount += 1;
+                return;
+              }
+              fn?.(ev);
+            };
+            protoDesc?.set?.call(ws, wrappedHandler);
+          },
+        });
+      }
+      return ws;
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "crocflow-confirm-retry-11",
+      dualRelay: true,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: dropFirstConfirmWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "crocflow-confirm-retry-11",
+      dualRelay: true,
+      baseWsUrl,
+      wsFactory: nodeWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+
+    const [sendRes, recvRes] = await Promise.race([
+      Promise.all([sendPromise, recvPromise]),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("pake-confirm retry timed out")), 3000),
+      ),
+    ]);
+
+    assert.equal(droppedConfirmCount, 2);
+    assert.equal(sendRes.alphaDelivered + sendRes.betaDelivered, 7);
+    assert.deepEqual(recvRes.files[0].bytes, files[0].bytes);
+    assert.deepEqual(recvRes.files[1].bytes, files[1].bytes);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});
+
+test("Enhanced SPAKE2 PAKE rejects mismatched codephrase in the same room immediately", async () => {
+  const server = await createCrocFlowServer({ useViteDev: false, port: 0, host: "127.0.0.1" });
+  const { port } = await server.listen(0, "127.0.0.1");
+  const baseWsUrl = `ws://127.0.0.1:${port}/ws-dual`;
+  const ac = new AbortController();
+
+  try {
+    const files = makeTestFiles(false);
+    const { adapter } = createMemoryCache();
+
+    // Force both peers into the same physical room while holding different codephrases
+    const sharedRoomWsFactory = (url: string): WebSocketLike => {
+      const parsed = new URL(url);
+      parsed.searchParams.set("room", "cf-forced-collision-room");
+      return nodeWsFactory(parsed.toString());
+    };
+
+    const sendPromise = sendEnhancedTransfer({
+      files,
+      codephrase: "sender-secret-alpha",
+      dualRelay: false,
+      chunkSize: 16 * 1024,
+      baseWsUrl,
+      wsFactory: sharedRoomWsFactory,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    const recvPromise = receiveEnhancedTransfer({
+      codephrase: "receiver-wrong-beta",
+      dualRelay: false,
+      baseWsUrl,
+      wsFactory: sharedRoomWsFactory,
+      cache: adapter,
+      emitInspector: false,
+      signal: ac.signal,
+    });
+
+    await assert.rejects(() => recvPromise, /Mã bí mật không khớp/);
+    ac.abort();
+    await sendPromise.catch(() => undefined);
+  } finally {
+    ac.abort();
+    (server.httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await server.close();
+  }
+});

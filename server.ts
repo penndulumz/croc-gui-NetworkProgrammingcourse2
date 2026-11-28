@@ -222,8 +222,16 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
 
       upstream.once("connect", () => {
         upstream.setTimeout(0);
+        upstream.setKeepAlive(true, 15_000);
         upgraded = true;
         wssBridge.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+          const heartbeat = setInterval(() => {
+            if (ws.readyState === ws.OPEN) {
+              ws.ping();
+            }
+          }, 20_000);
+          heartbeat.unref?.();
+
           ws.on("message", (data) => {
             if (!upstream.destroyed) {
               if (Buffer.isBuffer(data)) {
@@ -245,6 +253,7 @@ export async function createCrocFlowServer(options: CrocFlowServerOptions = {}) 
           });
 
           const teardown = () => {
+            clearInterval(heartbeat);
             if (!upstream.destroyed) upstream.destroy();
             if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
               ws.close();

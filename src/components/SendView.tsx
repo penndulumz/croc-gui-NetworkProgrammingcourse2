@@ -57,6 +57,7 @@ import {
 import type { Locale } from "../lib/i18n";
 import { getTranslations } from "../lib/i18n";
 import { ModeSelector } from "./ModeSelector";
+import { sanitizeCodephraseInput } from "./ReceiveView";
 import { RelayProfileBanner } from "./RelayProfileBanner";
 import { StreamInspectorDrawer } from "./StreamInspectorDrawer";
 
@@ -93,7 +94,7 @@ export function SendView({
   const [payloadKind, setPayloadKind] = useState<StandardPayloadKind>("files");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [textPayload, setTextPayload] = useState("");
-  const [codephrase, setCodephrase] = useState("4281-croc-flow-demo");
+  const [codephrase, setCodephrase] = useState<string>(() => generateCode());
   const [dualRelay, setDualRelay] = useState(true);
   const [targetFastestRelay, setTargetFastestRelay] = useState(true);
   const [chunkSize, setChunkSize] = useState<number>(64 * 1024);
@@ -128,27 +129,29 @@ export function SendView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Bộ đếm đơn điệu và cờ chỉnh sửa thủ công nhằm chống race condition khi probe độ trễ bất đồng bộ:
-  // nếu người dùng tự sửa Codephrase, chuyển Hồ Sơ Relay, hoặc đã bắt đầu Phiên Truyền thì kết quả cũ bị bỏ qua.
+  // Bộ đếm đơn điệu và cờ khóa mã nhằm chống race condition khi probe độ trễ bất đồng bộ:
+  // nếu người dùng tự sửa, sao chép, mở QR Codephrase, hoặc đang truyền thì mã hiển thị không bao giờ bị ghi đè ngầm.
   const targetFastestRelayRef = useRef(targetFastestRelay);
   targetFastestRelayRef.current = targetFastestRelay;
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const codeGenSeqRef = useRef(0);
   const userEditedCodeRef = useRef(false);
+  const [probedLatenciesVersion, setProbedLatenciesVersion] = useState(0);
 
   const fastestProbedRelay = useMemo(() => {
+    void probedLatenciesVersion;
     const relayAddresses = bridgeConfig?.relayAddresses ?? [];
     const latencies = loadRelayLatencies();
     return findFastestRelay(latencies, relayAddresses);
-  }, [bridgeConfig]);
+  }, [bridgeConfig, probedLatenciesVersion]);
 
   // Sinh Codephrase tối ưu độ trễ cho Standard Mode và Enhanced Mode khi dùng Hồ Sơ Relay Public Croc Relays:
   // chọn trước Relay Node có RTT thấp nhất rồi tìm Codephrase có hàm băm relayIndex trỏ đúng vào nút đó.
   const autoGenerateCode = useCallback(
-    async (targetMode: SendMode = mode) => {
+    async (targetMode: SendMode = mode, probeIfMissing = false) => {
       const seq = ++codeGenSeqRef.current;
-      // Kiểm tra lượt sinh hiện tại đã lỗi thời chưa (có lượt mới hơn, đang truyền, hoặc người dùng đã tự nhập Codephrase).
+      // Kiểm tra lượt sinh hiện tại đã lỗi thời chưa (có lượt mới hơn, đang truyền, hoặc người dùng đã khóa/sửa Codephrase).
       const isStale = () =>
         codeGenSeqRef.current !== seq || busyRef.current || userEditedCodeRef.current;
 
@@ -160,9 +163,17 @@ export function SendView({
       if (shouldOptimizePublic) {
         let latencies = loadRelayLatencies();
         let fastest = findFastestRelay(latencies, relayAddresses);
-        if (!fastest) {
+        if (!fastest && !probeIfMissing) {
+          // Đo RTT nền để cập nhật badge và phục vụ lần tạo mã tiếp theo mà không ghi đè ngầm mã đang hiển thị.
+          void probePublicRelays(relayAddresses)
+            .then(() => setProbedLatenciesVersion((v) => v + 1))
+            .catch(() => undefined);
+          return;
+        }
+        if (!fastest && probeIfMissing) {
           try {
             latencies = await probePublicRelays(relayAddresses);
+            setProbedLatenciesVersion((v) => v + 1);
             fastest = findFastestRelay(latencies, relayAddresses);
           } catch {
             // Ignore probe errors
@@ -182,7 +193,9 @@ export function SendView({
       }
       if (isStale()) return;
       setOptimizedRelay(null);
-      setCodephrase(generateCode());
+      if (probeIfMissing) {
+        setCodephrase(generateCode());
+      }
     },
     [bridgeConfig, mode, relayProfile],
   );
@@ -192,15 +205,15 @@ export function SendView({
       // Đánh dấu Codephrase đã được nạp sẵn từ ngoài để hủy mọi probe tự động sinh mã đang chạy dở.
       codeGenSeqRef.current += 1;
       userEditedCodeRef.current = true;
-      setCodephrase(prefillCode);
+      setCodephrase(sanitizeCodephraseInput(prefillCode));
       setOptimizedRelay(null);
       onClearPrefill?.();
       return;
     }
     if (!userEditedCodeRef.current && !busyRef.current) {
-      void autoGenerateCode();
+      void autoGenerateCode(mode, false);
     }
-  }, [prefillCode, onClearPrefill, autoGenerateCode]);
+  }, [prefillCode, onClearPrefill, autoGenerateCode, mode]);
 
   useEffect(() => {
     if (selectedPeer) {
@@ -234,10 +247,12 @@ export function SendView({
 
   const regenerateCode = () => {
     userEditedCodeRef.current = false;
-    void autoGenerateCode();
+    void autoGenerateCode(mode, true);
   };
 
   const copyText = async (label: string, value: string) => {
+    // Khóa codephrase hiện tại sau khi người dùng đã sao chép để chia sẻ cho máy nhận.
+    userEditedCodeRef.current = true;
     try {
       await navigator.clipboard.writeText(value);
       setCopiedItem(label);
@@ -843,7 +858,15 @@ export function SendView({
                     // Tăng seq và bật cờ chỉnh sửa thủ công để các probe độ trễ đang chạy không ghi đè giá trị người dùng nhập.
                     codeGenSeqRef.current += 1;
                     userEditedCodeRef.current = true;
-                    setCodephrase(e.target.value);
+                    setCodephrase(sanitizeCodephraseInput(e.target.value));
+                    setOptimizedRelay(null);
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pasted = e.clipboardData.getData("text");
+                    codeGenSeqRef.current += 1;
+                    userEditedCodeRef.current = true;
+                    setCodephrase(sanitizeCodephraseInput(pasted));
                     setOptimizedRelay(null);
                   }}
                   className="h-10 w-full rounded-xl border border-zinc-300 bg-white pl-3.5 pr-20 font-mono text-sm font-semibold text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400"
@@ -908,7 +931,10 @@ export function SendView({
 
               <button
                 type="button"
-                onClick={() => setShowQRModal(true)}
+                onClick={() => {
+                  userEditedCodeRef.current = true;
+                  setShowQRModal(true);
+                }}
                 className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-zinc-300 bg-white px-3.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <QrCode className="h-4 w-4" aria-hidden="true" />

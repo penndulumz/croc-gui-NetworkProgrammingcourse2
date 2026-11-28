@@ -11,7 +11,8 @@ const MAX_RAW_BUFFER = 4 * 1024 * 1024;
 type SocketMode = "framed" | "handoff" | "raw";
 
 export function bridgeForPort(bridge: string, relayIndex: number, port: string) {
-  const base = new URL(bridge || bridgeWsURL("/ws"), window.location.href);
+  const origin = typeof window !== "undefined" ? window.location.href : "http://localhost/";
+  const base = new URL(bridge || bridgeWsURL("/ws"), origin);
   if (base.protocol === "http:") base.protocol = "ws:";
   if (base.protocol === "https:") base.protocol = "wss:";
   if (base.protocol !== "ws:" && base.protocol !== "wss:") {
@@ -46,7 +47,13 @@ export class CrocSocket {
         const chunk =
           event.data instanceof ArrayBuffer
             ? new Uint8Array(event.data)
-            : new Uint8Array();
+            : ArrayBuffer.isView(event.data)
+              ? new Uint8Array(
+                  event.data.buffer,
+                  event.data.byteOffset,
+                  event.data.byteLength,
+                )
+              : new Uint8Array();
         if (this.mode === "raw") {
           this.deliverRaw(chunk);
           return;
