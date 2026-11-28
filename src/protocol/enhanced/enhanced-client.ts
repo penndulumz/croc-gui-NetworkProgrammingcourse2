@@ -13,6 +13,10 @@ import { clearResumeCache, loadVerifiedChunkMap, saveVerifiedChunk } from "./res
 import { protocolEventBus } from "../event-bus";
 import { calculateManifestFileProgress, type FileProgress } from "../../lib/metrics";
 import { bridgeWsURL } from "../../lib/bridge-origin";
+import { relayIndex } from "../croc/codephrase";
+import { connectRelay, controlPort } from "../croc/relay";
+import type { CrocSocket } from "../croc/transport";
+import { isLocalLabProfile, type RelayProfileMode } from "../../lib/relay-manager";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -62,7 +66,24 @@ export interface EnhancedProgress {
   betaChunks: number;
   failoverChunks: number;
   alphaAlive: boolean;
+  betaAlive?: boolean;
   fileProgress?: FileProgress[];
+}
+
+export interface PublicRelaySettings {
+  bridgeURL: string;
+  relayAddresses: string[];
+  relayPassword: string;
+}
+
+export interface PublicDualRelayPlan {
+  alphaIndex: number;
+  betaIndex: number;
+  alphaHost: string;
+  betaHost: string;
+  alphaPort: string;
+  betaPort: string;
+  singleHostFallback: boolean;
 }
 
 export interface ReceivedEnhancedFile {
@@ -96,11 +117,18 @@ type WirePlainMessage =
   | { type: "pake-init"; pubKeyB64: string; saltB64: string }
   | { type: "pake-reply"; pubKeyB64: string; confirmB64: string }
   | { type: "pake-confirm"; confirmB64: string }
-  | { type: "encrypted"; ivB64: string; ctB64: string };
+  | { type: "encrypted"; ivB64: string; ctB64: string }
+  | { type: "peer_count"; channel: RelayLane; roomId: string; count: number };
 
 type DecryptedPayload =
   | { kind: "manifest"; manifest: FolderManifest; dualRelay: boolean }
-  | { kind: "resume-plan"; missingIndices: number[]; skippedCount: number; newFilePaths: string[] }
+  | {
+      kind: "resume-plan";
+      missingIndices: number[];
+      skippedCount: number;
+      newFilePaths: string[];
+      dualRelayAccepted?: boolean;
+    }
   | {
       kind: "chunk";
       globalIndex: number;
@@ -109,6 +137,7 @@ type DecryptedPayload =
       dataB64: string;
     }
   | { kind: "chunk-ack"; globalIndex: number; lane: RelayLane }
+  | { kind: "lane-down"; lane: RelayLane }
   | { kind: "complete"; totalVerified: number }
   | { kind: "error"; message: string };
 
@@ -268,11 +297,14 @@ class AsyncMessageQueue<T> {
 
 interface RelayChannelConnection {
   lane: RelayLane;
-  ws: WebSocketLike;
   alive: boolean;
   sendJson: (msg: WirePlainMessage) => void;
+  flush?: () => Promise<void>;
   close: () => void;
 }
+
+const MAX_IN_FLIGHT_PER_LANE = 4;
+const PAKE_INIT_RETRY_MS = 350;
 
 function defaultWsBaseUrl(): string {
   if (typeof window === "undefined") {
@@ -293,7 +325,48 @@ function resolveTargetWsBaseUrl(baseWsUrl: string, targetRelayNode?: string): st
   return baseWsUrl;
 }
 
-async function openRelayChannel(params: {
+function extractRelayHost(address: string): string {
+  const lastColon = address.lastIndexOf(":");
+  return lastColon > 0 ? address.slice(0, lastColon) : address;
+}
+
+/**
+ * Resolves deterministic Public Croc Relay endpoints for Dual-Relay Alpha and Beta lanes
+ * from the shared Codephrase so both peers always rendezvous without external signaling.
+ */
+export async function resolvePublicDualRelayPlan(
+  codephrase: string,
+  relayAddresses: string[],
+): Promise<PublicDualRelayPlan> {
+  if (relayAddresses.length === 0) {
+    throw new Error("Chưa có cấu hình Relay Croc công cộng.");
+  }
+  const alphaIndex = await relayIndex(codephrase, relayAddresses.length);
+  const singleHostFallback = relayAddresses.length === 1;
+  const betaIndex = singleHostFallback ? alphaIndex : (alphaIndex + 1) % relayAddresses.length;
+  const alphaAddr = relayAddresses[alphaIndex];
+  const betaAddr = relayAddresses[betaIndex];
+  const alphaPort = controlPort(alphaAddr);
+  const rawBetaPort = controlPort(betaAddr);
+  const betaPort =
+    singleHostFallback && rawBetaPort === alphaPort
+      ? alphaPort === "9009"
+        ? "9010"
+        : "9009"
+      : rawBetaPort;
+
+  return {
+    alphaIndex,
+    betaIndex,
+    alphaHost: extractRelayHost(alphaAddr),
+    betaHost: extractRelayHost(betaAddr),
+    alphaPort,
+    betaPort,
+    singleHostFallback,
+  };
+}
+
+async function openLocalWsChannel(params: {
   baseWsUrl: string;
   lane: RelayLane;
   room: string;
@@ -301,6 +374,7 @@ async function openRelayChannel(params: {
   targetRelayNode?: string;
   wsFactory: WebSocketFactory;
   onMessage: (lane: RelayLane, msg: WirePlainMessage) => void;
+  onPeerCount?: (lane: RelayLane, count: number) => void;
   onClose: (lane: RelayLane) => void;
   signal?: AbortSignal;
 }): Promise<RelayChannelConnection> {
@@ -319,7 +393,6 @@ async function openRelayChannel(params: {
 
   const conn: RelayChannelConnection = {
     lane: params.lane,
-    ws,
     alive: false,
     sendJson: (msg) => {
       if (!conn.alive || ws.readyState !== 1) {
@@ -371,14 +444,21 @@ async function openRelayChannel(params: {
               : dec.decode(new Uint8Array(ev.data as Uint8Array));
         if (raw === "__pong__" || raw === "__ping__") return;
         const parsed = JSON.parse(raw) as WirePlainMessage;
+        if (parsed.type === "peer_count") {
+          params.onPeerCount?.(params.lane, parsed.count);
+          return;
+        }
         params.onMessage(params.lane, parsed);
       } catch {
         // Ignore malformed non-JSON frames
       }
     };
     ws.onclose = () => {
+      const wasOpen = settled && conn.alive;
       conn.alive = false;
-      params.onClose(params.lane);
+      if (wasOpen) {
+        params.onClose(params.lane);
+      }
       if (!settled) {
         settled = true;
         params.signal?.removeEventListener("abort", onAbort);
@@ -388,6 +468,224 @@ async function openRelayChannel(params: {
   });
 
   return conn;
+}
+
+async function openPublicCrocChannel(params: {
+  publicRelaySettings: PublicRelaySettings;
+  relayIdx: number;
+  port: string;
+  lane: RelayLane;
+  room: string;
+  onMessage: (lane: RelayLane, msg: WirePlainMessage) => void;
+  onClose: (lane: RelayLane) => void;
+  connectFn: typeof connectRelay;
+  signal?: AbortSignal;
+}): Promise<RelayChannelConnection> {
+  const { socket } = await params.connectFn(
+    {
+      bridgeURL: params.publicRelaySettings.bridgeURL,
+      relayAddresses: params.publicRelaySettings.relayAddresses,
+      relayPassword: params.publicRelaySettings.relayPassword,
+      storeAPI: "",
+    },
+    `${params.room}-${params.lane}`,
+    params.port,
+    params.relayIdx,
+    params.signal,
+  );
+
+  let sendChain: Promise<void> = Promise.resolve();
+  const conn: RelayChannelConnection = {
+    lane: params.lane,
+    alive: true,
+    sendJson: (msg) => {
+      if (!conn.alive) {
+        throw new Error(`Kênh Relay ${params.lane} đã ngắt kết nối`);
+      }
+      const bytes = enc.encode(JSON.stringify(msg));
+      sendChain = sendChain
+        .then(() => socket.send(bytes))
+        .catch(() => {
+          const wasAlive = conn.alive;
+          conn.alive = false;
+          if (wasAlive) params.onClose(params.lane);
+        });
+    },
+    flush: () => sendChain,
+    close: () => {
+      conn.alive = false;
+      socket.close();
+    },
+  };
+
+  void (async () => {
+    try {
+      while (conn.alive) {
+        const frame = await socket.receive(true);
+        if (!conn.alive) break;
+        const parsed = JSON.parse(dec.decode(frame)) as WirePlainMessage;
+        params.onMessage(params.lane, parsed);
+      }
+    } catch {
+      // Socket closed or frame error
+    } finally {
+      const wasAlive = conn.alive;
+      conn.alive = false;
+      if (wasAlive) {
+        params.onClose(params.lane);
+      }
+    }
+  })();
+
+  return conn;
+}
+
+async function openEnhancedChannels(params: {
+  room: string;
+  role: "sender" | "receiver";
+  codephrase: string;
+  dualRelay: boolean;
+  relayProfile?: RelayProfileMode;
+  publicRelaySettings?: PublicRelaySettings;
+  targetRelayNode?: string;
+  baseWsUrl: string;
+  wsFactory: WebSocketFactory;
+  publicConnectRelay?: typeof connectRelay;
+  onMessage: (lane: RelayLane, msg: WirePlainMessage) => void;
+  onPeerCount?: (lane: RelayLane, count: number) => void;
+  onClose: (lane: RelayLane) => void;
+  signal: AbortSignal;
+}): Promise<{
+  alphaConn: RelayChannelConnection;
+  betaConn: RelayChannelConnection | null;
+  effectiveDualRelay: boolean;
+  routeDetail: string;
+  betaFallbackReason?: string;
+}> {
+  const usePublic =
+    params.relayProfile === "public" && Boolean(params.publicRelaySettings?.relayAddresses?.length);
+
+  if (usePublic && params.publicRelaySettings) {
+    const plan = await resolvePublicDualRelayPlan(
+      params.codephrase,
+      params.publicRelaySettings.relayAddresses,
+    );
+    const connectFn = params.publicConnectRelay ?? connectRelay;
+
+    const alphaPromise = openPublicCrocChannel({
+      publicRelaySettings: params.publicRelaySettings,
+      relayIdx: plan.alphaIndex,
+      port: plan.alphaPort,
+      lane: "alpha",
+      room: params.room,
+      onMessage: params.onMessage,
+      onClose: params.onClose,
+      connectFn,
+      signal: params.signal,
+    });
+
+    const betaPromise = params.dualRelay
+      ? openPublicCrocChannel({
+          publicRelaySettings: params.publicRelaySettings,
+          relayIdx: plan.betaIndex,
+          port: plan.betaPort,
+          lane: "beta",
+          room: params.room,
+          onMessage: params.onMessage,
+          onClose: params.onClose,
+          connectFn,
+          signal: params.signal,
+        })
+      : Promise.resolve(null);
+
+    const [alphaRes, betaRes] = await Promise.allSettled([alphaPromise, betaPromise]);
+    if (alphaRes.status === "rejected") {
+      if (betaRes.status === "fulfilled" && betaRes.value) {
+        betaRes.value.close();
+      }
+      const err = alphaRes.reason;
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Không thể kết nối Public Croc Relay (${plan.alphaHost}:${plan.alphaPort}): ${reason}. Nếu mạng chặn cổng TCP 9009–9017, hãy đổi Hồ sơ Relay sang 'Local Dual-Relay Lab'.`,
+      );
+    }
+
+    const alphaConn = alphaRes.value;
+    let betaConn: RelayChannelConnection | null = null;
+    let betaFallbackReason: string | undefined;
+
+    if (params.dualRelay) {
+      if (betaRes.status === "fulfilled" && betaRes.value) {
+        betaConn = betaRes.value;
+      } else if (betaRes.status === "rejected") {
+        betaFallbackReason =
+          betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
+      }
+    }
+
+    const effectiveDualRelay = Boolean(params.dualRelay && betaConn?.alive);
+    const routeDetail = effectiveDualRelay
+      ? `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort} + ${plan.betaHost}:${plan.betaPort})`
+      : `Room ${params.room} · Public (${plan.alphaHost}:${plan.alphaPort})`;
+
+    return { alphaConn, betaConn, effectiveDualRelay, routeDetail, betaFallbackReason };
+  }
+
+  const alphaPromise = openLocalWsChannel({
+    baseWsUrl: params.baseWsUrl,
+    lane: "alpha",
+    room: params.room,
+    role: params.role,
+    targetRelayNode: params.targetRelayNode,
+    wsFactory: params.wsFactory,
+    onMessage: params.onMessage,
+    onPeerCount: params.onPeerCount,
+    onClose: params.onClose,
+    signal: params.signal,
+  });
+
+  const betaPromise = params.dualRelay
+    ? openLocalWsChannel({
+        baseWsUrl: params.baseWsUrl,
+        lane: "beta",
+        room: params.room,
+        role: params.role,
+        targetRelayNode: params.targetRelayNode,
+        wsFactory: params.wsFactory,
+        onMessage: params.onMessage,
+        onPeerCount: params.onPeerCount,
+        onClose: params.onClose,
+        signal: params.signal,
+      })
+    : Promise.resolve(null);
+
+  const [alphaRes, betaRes] = await Promise.allSettled([alphaPromise, betaPromise]);
+  if (alphaRes.status === "rejected") {
+    if (betaRes.status === "fulfilled" && betaRes.value) {
+      betaRes.value.close();
+    }
+    throw alphaRes.reason;
+  }
+
+  const alphaConn = alphaRes.value;
+  let betaConn: RelayChannelConnection | null = null;
+  let betaFallbackReason: string | undefined;
+  if (params.dualRelay) {
+    if (betaRes.status === "fulfilled" && betaRes.value) {
+      betaConn = betaRes.value;
+    } else if (betaRes.status === "rejected") {
+      betaFallbackReason =
+        betaRes.reason instanceof Error ? betaRes.reason.message : String(betaRes.reason);
+    }
+  }
+
+  const effectiveDualRelay = Boolean(params.dualRelay && betaConn?.alive);
+  const routeDetail = isLocalLabProfile(params.relayProfile)
+    ? `Room ${params.room} · Local Dual-Relay Lab (/ws-dual)`
+    : `Room ${params.room}`;
+
+  return { alphaConn, betaConn, effectiveDualRelay, routeDetail, betaFallbackReason };
 }
 
 export async function filesToManifestInputs(files: File[]): Promise<ManifestInputFile[]> {
@@ -411,6 +709,9 @@ export async function sendEnhancedTransfer(options: {
   files: ManifestInputFile[];
   codephrase: string;
   dualRelay?: boolean;
+  relayProfile?: RelayProfileMode;
+  publicRelaySettings?: PublicRelaySettings;
+  publicConnectRelay?: typeof connectRelay;
   targetRelayNode?: string;
   chunkSize?: number;
   baseWsUrl?: string;
@@ -426,6 +727,9 @@ export async function sendEnhancedTransfer(options: {
     files,
     codephrase,
     dualRelay = true,
+    relayProfile,
+    publicRelaySettings,
+    publicConnectRelay,
     targetRelayNode,
     chunkSize = 64 * 1024,
     baseWsUrl = defaultWsBaseUrl(),
@@ -464,13 +768,100 @@ export async function sendEnhancedTransfer(options: {
   let alphaConn: RelayChannelConnection | null = null;
   let betaConn: RelayChannelConnection | null = null;
   let scheduler: DualRelayScheduler | null = null;
+  let effectiveDualRelay = dualRelay;
   let alphaAlive = true;
+  let betaAlive = dualRelay;
+  let missingIndices: number[] = [];
+  let skippedCount = 0;
+  let bytesTransferred = 0;
 
-  const triggerFailover = (reason: string) => {
-    if (!alphaAlive) return;
-    alphaAlive = false;
-    alphaConn?.close();
-    const rerouted = scheduler?.triggerAlphaFailover() ?? [];
+  let workerWaiters: Array<{ resolve: () => void; reject: (err: Error) => void }> = [];
+  const wakeWorkers = (fatalErr?: Error) => {
+    const waiters = workerWaiters.splice(0);
+    for (const w of waiters) {
+      if (fatalErr) w.reject(fatalErr);
+      else w.resolve();
+    }
+  };
+  const waitForWorkerSignal = (): Promise<void> => {
+    if (controller.signal.aborted) {
+      return Promise.reject(new DOMException("Phiên truyền đã bị hủy", "AbortError"));
+    }
+    return new Promise<void>((resolve, reject) => {
+      workerWaiters.push({ resolve, reject });
+    });
+  };
+
+  const reportProgress = () => {
+    if (!scheduler) return;
+    const snap = scheduler.getSnapshot();
+    const elapsedSec = Math.max(0.05, (Date.now() - startedAt) / 1000);
+    const speedBps = bytesTransferred / elapsedSec;
+    if (emitInspector) {
+      protocolEventBus.recordThroughput(bytesTransferred, manifest.totalBytes, speedBps);
+    }
+    const completedSet = new Set<number>();
+    for (const idx of missingIndices) {
+      if (scheduler.isDelivered(idx)) {
+        completedSet.add(idx);
+      }
+    }
+    for (const c of manifest.chunks) {
+      if (!missingIndices.includes(c.globalIndex)) {
+        completedSet.add(c.globalIndex);
+      }
+    }
+    const fileProgress = calculateManifestFileProgress(
+      manifest.files,
+      manifest.chunks,
+      completedSet,
+    );
+    onProgress?.({
+      completedChunks: skippedCount + snap.deliveredCount,
+      totalChunks: manifest.totalChunks,
+      bytesTransferred,
+      totalBytes: manifest.totalBytes,
+      speedBps,
+      resumedChunks: skippedCount,
+      alphaChunks: snap.alphaDelivered,
+      betaChunks: snap.betaDelivered,
+      failoverChunks: snap.failoverReroutedCount,
+      alphaAlive: snap.alphaAlive,
+      betaAlive: snap.betaAlive,
+      fileProgress,
+    });
+  };
+
+  const triggerLaneFailover = (failedLane: RelayLane, reason: string) => {
+    if (failedLane === "alpha") {
+      if (!alphaAlive) return;
+      alphaAlive = false;
+      alphaConn?.close();
+      if (!effectiveDualRelay || !betaConn?.alive) return;
+      const rerouted = scheduler?.triggerAlphaFailover() ?? [];
+      if (emitInspector) {
+        for (const idx of rerouted) {
+          protocolEventBus.updateChunkState(idx, "failover", "failover");
+        }
+        protocolEventBus.logEvent({
+          kind: "failover",
+          mode: "enhanced",
+          relay: "beta",
+          title: "Failover kích hoạt: Relay Alpha mất kết nối!",
+          detail: `${reason} · Chuyển hướng tự động ${rerouted.length} chunk chẵn còn lại sang Relay Beta`,
+        });
+      }
+      onStatus?.(`Relay Alpha ngắt kết nối — đang tự động Failover ${rerouted.length} chunk sang Relay Beta…`);
+      reportProgress();
+      wakeWorkers();
+      return;
+    }
+
+    if (!betaAlive) return;
+    betaAlive = false;
+    betaConn?.close();
+    if (!effectiveDualRelay || !alphaConn?.alive) return;
+    const rerouted = scheduler?.triggerBetaFailover() ?? [];
     if (emitInspector) {
       for (const idx of rerouted) {
         protocolEventBus.updateChunkState(idx, "failover", "failover");
@@ -478,22 +869,33 @@ export async function sendEnhancedTransfer(options: {
       protocolEventBus.logEvent({
         kind: "failover",
         mode: "enhanced",
-        relay: "beta",
-        title: "Failover kích hoạt: Relay Alpha mất kết nối!",
-        detail: `${reason} · Chuyển hướng tự động ${rerouted.length} chunk chẵn còn lại sang Relay Beta`,
+        relay: "alpha",
+        title: "Failover kích hoạt: Relay Beta mất kết nối!",
+        detail: `${reason} · Chuyển hướng tự động ${rerouted.length} chunk lẻ còn lại sang Relay Alpha`,
       });
     }
-    onStatus?.(`Relay Alpha ngắt kết nối — đang tự động Failover ${rerouted.length} chunk sang Relay Beta…`);
+    onStatus?.(`Relay Beta ngắt kết nối — đang tự động Failover ${rerouted.length} chunk sang Relay Alpha…`);
+    reportProgress();
+    wakeWorkers();
   };
 
   const controller = new AbortController();
-  const combinedAbort = () => controller.abort();
-  signal?.addEventListener("abort", combinedAbort, { once: true });
+  const handleAbort = () => {
+    controller.abort();
+    const err = new DOMException("Phiên truyền đã bị hủy", "AbortError");
+    alphaConn?.close();
+    betaConn?.close();
+    incoming.close(err);
+    wakeWorkers(err);
+  };
+  signal?.addEventListener("abort", handleAbort, { once: true });
 
   try {
     onStatus?.(
-      targetRelayNode
-        ? `Đang định tuyến trực tiếp qua Relay Node nhanh nhất (${targetRelayNode})…`
+      relayProfile === "public" && publicRelaySettings?.relayAddresses?.length
+        ? dualRelay
+          ? "Đang mở kết nối Dual-Relay qua cụm Croc công cộng…"
+          : "Đang kết nối tới Public Croc Relay…"
         : dualRelay
           ? "Đang mở kết nối đồng thời tới Relay Alpha (Chẵn) & Relay Beta (Lẻ)…"
           : "Đang kết nối tới Relay Alpha…",
@@ -503,42 +905,62 @@ export async function sendEnhancedTransfer(options: {
       incoming.push({ lane, msg });
     };
     const handleClose = (lane: RelayLane) => {
-      if (lane === "alpha" && dualRelay && betaConn?.alive && scheduler && !scheduler.isComplete()) {
-        triggerFailover("Phát hiện đóng socket trên Relay Alpha");
-      } else if (!alphaConn?.alive && !betaConn?.alive) {
-        incoming.close(new Error("Cả hai kênh Relay đều đã đóng"));
+      if (lane === "alpha") {
+        if (effectiveDualRelay && betaConn?.alive) {
+          triggerLaneFailover("alpha", "Phát hiện đóng socket trên Relay Alpha");
+        } else {
+          alphaAlive = false;
+        }
+      } else if (lane === "beta") {
+        if (effectiveDualRelay && alphaConn?.alive) {
+          triggerLaneFailover("beta", "Phát hiện đóng socket trên Relay Beta");
+        } else {
+          betaAlive = false;
+        }
+      }
+
+      if (!alphaConn?.alive && !betaConn?.alive) {
+        const err = new Error("Cả hai kênh Relay đều đã đóng");
+        incoming.close(err);
+        wakeWorkers(err);
       }
     };
 
-    alphaConn = await openRelayChannel({
-      baseWsUrl,
-      lane: "alpha",
+    const opened = await openEnhancedChannels({
       room,
       role: "sender",
+      codephrase,
+      dualRelay,
+      relayProfile,
+      publicRelaySettings,
+      publicConnectRelay,
       targetRelayNode,
+      baseWsUrl,
       wsFactory,
       onMessage: handleMessage,
       onClose: handleClose,
       signal: controller.signal,
     });
+    alphaConn = opened.alphaConn;
+    betaConn = opened.betaConn;
+    effectiveDualRelay = opened.effectiveDualRelay;
+    alphaAlive = Boolean(alphaConn.alive);
+    betaAlive = Boolean(betaConn?.alive);
 
-    if (dualRelay) {
-      betaConn = await openRelayChannel({
-        baseWsUrl,
-        lane: "beta",
-        room,
-        role: "sender",
-        targetRelayNode,
-        wsFactory,
-        onMessage: handleMessage,
-        onClose: handleClose,
-        signal: controller.signal,
+    if (dualRelay && !effectiveDualRelay && opened.betaFallbackReason && emitInspector) {
+      protocolEventBus.logEvent({
+        kind: "relay",
+        mode: "enhanced",
+        relay: "alpha",
+        title: "Không mở được Relay Beta — chuyển về 1 kênh Relay Alpha",
+        detail: opened.betaFallbackReason,
       });
     }
 
     onHandleReady?.({
-      simulateAlphaDisconnect: () => triggerFailover("Người dùng kích hoạt mô phỏng ngắt Relay Alpha"),
-      cancel: () => controller.abort(),
+      simulateAlphaDisconnect: () =>
+        triggerLaneFailover("alpha", "Người dùng kích hoạt mô phỏng ngắt Relay Alpha"),
+      cancel: () => handleAbort(),
     });
 
     if (emitInspector) {
@@ -547,12 +969,10 @@ export async function sendEnhancedTransfer(options: {
         kind: "relay",
         mode: "enhanced",
         relay: "alpha",
-        title: targetRelayNode
-          ? `Định tuyến trực tiếp qua Relay Node nhanh nhất (${targetRelayNode})`
-          : dualRelay
-            ? "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)"
-            : "Đã kết nối Relay Alpha",
-        detail: `Room ${room}`,
+        title: effectiveDualRelay
+          ? "Đã mở song song Relay Alpha (chẵn) & Relay Beta (lẻ)"
+          : "Đã kết nối Relay Alpha",
+        detail: opened.routeDetail,
       });
       protocolEventBus.setPakeStep("pake", "active");
     }
@@ -613,18 +1033,21 @@ export async function sendEnhancedTransfer(options: {
       else throw new Error("Không còn kênh Relay hoạt động để gửi gói điều khiển");
     };
 
-    sendControlMsg({
+    const pakeReplyMsg: WirePlainMessage = {
       type: "pake-reply",
       pubKeyB64: bytesToBase64(myPubRaw),
       confirmB64: bytesToBase64(keys.confirmSender),
-    });
+    };
+    sendControlMsg(pakeReplyMsg);
 
-    // Verify receiver confirmation
+    // Verify receiver confirmation; idempotently re-reply if a duplicate pake-init arrives before confirm
     let confirmMsg: Extract<WirePlainMessage, { type: "pake-confirm" }> | null = null;
     while (!confirmMsg) {
       const next = await incoming.next();
       if (next.msg.type === "pake-confirm") {
         confirmMsg = next.msg;
+      } else if (next.msg.type === "pake-init" && next.msg.pubKeyB64 === initMsg.pubKeyB64) {
+        sendControlMsg(pakeReplyMsg);
       }
     }
     if (!bytesEqual(base64ToBytes(confirmMsg.confirmB64), keys.confirmReceiver)) {
@@ -642,13 +1065,17 @@ export async function sendEnhancedTransfer(options: {
       });
     }
 
-    // Send encrypted FolderManifest
+    // Send encrypted FolderManifest advertising effectiveDualRelay capability
     onStatus?.("Đang gửi Folder Manifest đã mã hóa cho máy nhận…");
-    sendControlMsg(await encryptPayload(keys.aesKey, { kind: "manifest", manifest, dualRelay }));
+    sendControlMsg(
+      await encryptPayload(keys.aesKey, {
+        kind: "manifest",
+        manifest,
+        dualRelay: effectiveDualRelay,
+      }),
+    );
 
-    // Wait for receiver's ResumePlan
-    let missingIndices: number[] = [];
-    let skippedCount = 0;
+    // Wait for receiver's ResumePlan + Dual-Relay negotiation
     while (true) {
       const next = await incoming.next();
       if (next.msg.type === "encrypted") {
@@ -656,6 +1083,21 @@ export async function sendEnhancedTransfer(options: {
         if (decMsg.kind === "resume-plan") {
           missingIndices = decMsg.missingIndices;
           skippedCount = decMsg.skippedCount;
+          if (decMsg.dualRelayAccepted === false && effectiveDualRelay) {
+            effectiveDualRelay = false;
+            betaAlive = false;
+            betaConn?.close();
+            betaConn = null;
+            if (emitInspector) {
+              protocolEventBus.logEvent({
+                kind: "relay",
+                mode: "enhanced",
+                relay: "alpha",
+                title: "Chuyển về 1 kênh Relay Alpha theo thỏa thuận với máy nhận",
+                detail: "Máy nhận chỉ bật Relay Alpha — toàn bộ chunk sẽ đi qua Alpha",
+              });
+            }
+          }
           if (emitInspector && skippedCount > 0) {
             const missingSet = new Set(missingIndices);
             for (const c of manifest.chunks) {
@@ -681,17 +1123,22 @@ export async function sendEnhancedTransfer(options: {
       }
     }
 
-    scheduler = new DualRelayScheduler(missingIndices, dualRelay);
+    scheduler = new DualRelayScheduler(missingIndices, effectiveDualRelay);
+    if (!alphaAlive && effectiveDualRelay && betaAlive) {
+      scheduler.triggerAlphaFailover();
+    } else if (!betaAlive && effectiveDualRelay && alphaAlive) {
+      scheduler.triggerBetaFailover();
+    }
+
     const chunkLookup = new Map<number, ManifestChunkDescriptor>();
     for (const c of manifest.chunks) {
       chunkLookup.set(c.globalIndex, c);
     }
 
-    let bytesTransferred = manifest.chunks
+    bytesTransferred = manifest.chunks
       .filter((c) => !missingIndices.includes(c.globalIndex))
       .reduce((acc, c) => acc + c.size, 0);
 
-    const ackWaiters = new Map<number, () => void>();
     let receiverFinished = false;
     const finishedHandlers: {
       resolve?: () => void;
@@ -701,10 +1148,9 @@ export async function sendEnhancedTransfer(options: {
       finishedHandlers.resolve = res;
       finishedHandlers.reject = rej;
     });
-    // Prevent Node unhandledRejection if peer disconnects before we await finishedPromise
     void finishedPromise.catch(() => undefined);
 
-    // Background reader for ACKs and completion
+    // Background reader for chunk-ack, lane-down, and completion
     const ackLoop = (async () => {
       try {
         while (!receiverFinished) {
@@ -712,13 +1158,43 @@ export async function sendEnhancedTransfer(options: {
           if (next.msg.type !== "encrypted") continue;
           const payload = await decryptPayload(keys.aesKey, next.msg);
           if (payload.kind === "chunk-ack") {
-            const cb = ackWaiters.get(payload.globalIndex);
-            if (cb) {
-              ackWaiters.delete(payload.globalIndex);
-              cb();
+            const newlyDelivered = scheduler.markDelivered(payload.globalIndex, payload.lane);
+            if (newlyDelivered) {
+              const desc = chunkLookup.get(payload.globalIndex);
+              if (desc) bytesTransferred += desc.size;
+              if (emitInspector) {
+                const wasRerouted = scheduler.getChunk(payload.globalIndex)?.rerouted ?? false;
+                protocolEventBus.updateChunkState(
+                  payload.globalIndex,
+                  wasRerouted ? "failover" : "verified",
+                );
+              }
+              reportProgress();
+              wakeWorkers();
+            }
+          } else if (payload.kind === "lane-down") {
+            if (payload.lane === "alpha" && alphaAlive && effectiveDualRelay && betaConn?.alive) {
+              triggerLaneFailover("alpha", "Máy nhận mất kết nối kênh Relay Alpha");
+            } else if (payload.lane === "beta" && betaAlive && effectiveDualRelay && alphaConn?.alive) {
+              triggerLaneFailover("beta", "Máy nhận mất kết nối kênh Relay Beta");
             }
           } else if (payload.kind === "complete") {
+            const finalized = scheduler.markRemainingDelivered();
+            for (const item of finalized) {
+              const desc = chunkLookup.get(item.globalIndex);
+              if (desc) bytesTransferred += desc.size;
+              if (emitInspector) {
+                protocolEventBus.updateChunkState(
+                  item.globalIndex,
+                  item.rerouted ? "failover" : "verified",
+                );
+              }
+            }
+            if (finalized.length > 0) {
+              reportProgress();
+            }
             receiverFinished = true;
+            wakeWorkers();
             finishedHandlers.resolve?.();
             break;
           } else if (payload.kind === "error") {
@@ -727,60 +1203,36 @@ export async function sendEnhancedTransfer(options: {
         }
       } catch (err) {
         if (!receiverFinished) {
-          finishedHandlers.reject?.(err instanceof Error ? err : new Error(String(err)));
+          const errorObj = err instanceof Error ? err : new Error(String(err));
+          wakeWorkers(errorObj);
+          finishedHandlers.reject?.(errorObj);
         }
       }
     })();
     void ackLoop.catch(() => undefined);
 
-    const reportProgress = () => {
-      const snap = scheduler!.getSnapshot();
-      const elapsedSec = Math.max(0.05, (Date.now() - startedAt) / 1000);
-      const speedBps = bytesTransferred / elapsedSec;
-      if (emitInspector) {
-        protocolEventBus.recordThroughput(bytesTransferred, manifest.totalBytes, speedBps);
-      }
-      const completedSet = new Set<number>();
-      for (const idx of missingIndices) {
-        if (scheduler?.isDelivered(idx)) {
-          completedSet.add(idx);
-        }
-      }
-      for (const c of manifest.chunks) {
-        if (!missingIndices.includes(c.globalIndex)) {
-          completedSet.add(c.globalIndex);
-        }
-      }
-      const fileProgress = calculateManifestFileProgress(
-        manifest.files,
-        manifest.chunks,
-        completedSet,
-      );
-      onProgress?.({
-        completedChunks: skippedCount + snap.deliveredCount,
-        totalChunks: manifest.totalChunks,
-        bytesTransferred,
-        totalBytes: manifest.totalBytes,
-        speedBps,
-        resumedChunks: skippedCount,
-        alphaChunks: snap.alphaDelivered,
-        betaChunks: snap.betaDelivered,
-        failoverChunks: snap.failoverReroutedCount,
-        alphaAlive: snap.alphaAlive,
-        fileProgress,
-      });
-    };
-
     const runLaneWorker = async (lane: RelayLane) => {
-      while (!scheduler!.isComplete()) {
+      while (!receiverFinished && !scheduler!.isComplete()) {
         if (controller.signal.aborted) {
           throw new DOMException("Phiên truyền đã bị hủy", "AbortError");
         }
+        if ((lane === "alpha" && !alphaAlive) || (lane === "beta" && !betaAlive)) {
+          break;
+        }
+        if (scheduler!.inFlightCountForLane(lane) >= MAX_IN_FLIGHT_PER_LANE) {
+          await waitForWorkerSignal();
+          continue;
+        }
+
         const scheduledChunk = scheduler!.nextForLane(lane);
         if (!scheduledChunk) {
-          // Wait briefly if other lane is still active or might failover
-          if (lane === "beta" && alphaAlive && !scheduler!.isComplete()) {
-            await new Promise((r) => setTimeout(r, 15));
+          const otherLaneAlive = lane === "alpha" ? betaAlive : alphaAlive;
+          if (
+            !receiverFinished &&
+            !scheduler!.isComplete() &&
+            (scheduler!.inFlightCountForLane(lane) > 0 || (effectiveDualRelay && otherLaneAlive))
+          ) {
+            await waitForWorkerSignal();
             continue;
           }
           break;
@@ -790,10 +1242,11 @@ export async function sendEnhancedTransfer(options: {
         const fileInput = files[desc.fileIndex];
         const rawSlice = fileInput.bytes.subarray(desc.offset, desc.offset + desc.size);
         const conn = lane === "alpha" ? alphaConn : betaConn;
+        const survivingConn = lane === "alpha" ? betaConn : alphaConn;
 
         if (!conn || !conn.alive) {
-          if (lane === "alpha" && dualRelay && betaConn?.alive) {
-            triggerFailover("Kênh Relay Alpha không sẵn sàng khi đang phát");
+          if (effectiveDualRelay && survivingConn?.alive) {
+            triggerLaneFailover(lane, `Kênh Relay ${lane} không sẵn sàng khi đang phát`);
             break;
           }
           throw new Error(`Kênh Relay ${lane} bị ngắt kết nối`);
@@ -818,8 +1271,8 @@ export async function sendEnhancedTransfer(options: {
         try {
           conn.sendJson(encryptedFrame);
         } catch {
-          if (lane === "alpha" && dualRelay && betaConn?.alive) {
-            triggerFailover("Lỗi gửi frame trên Relay Alpha");
+          if (effectiveDualRelay && survivingConn?.alive) {
+            triggerLaneFailover(lane, `Lỗi gửi frame trên Relay ${lane}`);
             break;
           }
           throw new Error(`Không thể gửi chunk #${desc.globalIndex} qua Relay ${lane}`);
@@ -828,32 +1281,17 @@ export async function sendEnhancedTransfer(options: {
         if (chunkDelayMs > 0) {
           await new Promise((r) => setTimeout(r, chunkDelayMs));
         }
-
-        // If Alpha died while this chunk was in-flight, scheduler rerouted it to Beta
-        if (lane === "alpha" && !alphaAlive) {
-          break;
-        }
-
-        scheduler!.markDelivered(desc.globalIndex, lane);
-        bytesTransferred += desc.size;
-        if (emitInspector) {
-          protocolEventBus.updateChunkState(
-            desc.globalIndex,
-            scheduledChunk.rerouted ? "failover" : "verified",
-          );
-        }
-        reportProgress();
       }
     };
 
     onStatus?.(
-      dualRelay
+      effectiveDualRelay
         ? "Đang truyền song song Chunk chẵn (Relay Alpha) & Chunk lẻ (Relay Beta)…"
         : "Đang truyền dữ liệu mã hóa qua Relay Alpha…",
     );
 
     if (missingIndices.length > 0) {
-      if (dualRelay) {
+      if (effectiveDualRelay) {
         await Promise.all([runLaneWorker("alpha"), runLaneWorker("beta")]);
       } else {
         await runLaneWorker("alpha");
@@ -911,7 +1349,7 @@ export async function sendEnhancedTransfer(options: {
     }
     throw err;
   } finally {
-    signal?.removeEventListener("abort", combinedAbort);
+    signal?.removeEventListener("abort", handleAbort);
     alphaConn?.close();
     betaConn?.close();
   }
@@ -920,6 +1358,9 @@ export async function sendEnhancedTransfer(options: {
 export interface EnhancedReceiveParams {
   codephrase: string;
   dualRelay?: boolean;
+  relayProfile?: RelayProfileMode;
+  publicRelaySettings?: PublicRelaySettings;
+  publicConnectRelay?: typeof connectRelay;
   targetRelayNode?: string;
   baseWsUrl?: string;
   wsFactory?: WebSocketFactory;
@@ -936,6 +1377,9 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   const {
     codephrase,
     dualRelay = true,
+    relayProfile,
+    publicRelaySettings,
+    publicConnectRelay,
     targetRelayNode,
     baseWsUrl = defaultWsBaseUrl(),
     wsFactory = defaultWebSocketFactory,
@@ -963,11 +1407,40 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
   const incoming = new AsyncMessageQueue<{ lane: RelayLane; msg: WirePlainMessage }>();
   let alphaConn: RelayChannelConnection | null = null;
   let betaConn: RelayChannelConnection | null = null;
+  let alphaAlive = false;
+  let betaAlive = false;
+  let sessionKeys: {
+    aesKey: CryptoKey;
+    confirmSender: Uint8Array;
+    confirmReceiver: Uint8Array;
+  } | null = null;
+  let transferComplete = false;
+  let gotPakeReply = false;
+  let sendPakeInitFn: (() => void) | null = null;
+  let pakeRetryTimer: ReturnType<typeof setInterval> | undefined;
+
+  const controller = new AbortController();
+  const handleAbort = () => {
+    controller.abort();
+    if (pakeRetryTimer) {
+      clearInterval(pakeRetryTimer);
+      pakeRetryTimer = undefined;
+    }
+    alphaConn?.close();
+    betaConn?.close();
+    incoming.close(new DOMException("Đã hủy nhận dữ liệu", "AbortError"));
+  };
+  if (signal?.aborted) {
+    throw new DOMException("Đã hủy nhận dữ liệu", "AbortError");
+  }
+  signal?.addEventListener("abort", handleAbort, { once: true });
 
   try {
     onStatus?.(
-      targetRelayNode
-        ? `Đang kết nối máy nhận qua Relay Node (${targetRelayNode})…`
+      relayProfile === "public" && publicRelaySettings?.relayAddresses?.length
+        ? dualRelay
+          ? "Đang kết nối máy nhận qua cụm Public Croc Relay…"
+          : "Đang kết nối máy nhận tới Public Croc Relay…"
         : dualRelay
           ? "Đang kết nối máy nhận tới Relay Alpha & Relay Beta…"
           : "Đang kết nối máy nhận tới Relay Alpha…",
@@ -976,34 +1449,64 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     const handleMsg = (lane: RelayLane, msg: WirePlainMessage) => {
       incoming.push({ lane, msg });
     };
-    const handleClose = () => {
+    const handlePeerCount = (_lane: RelayLane, count: number) => {
+      if (count >= 2 && !gotPakeReply && sendPakeInitFn) {
+        sendPakeInitFn();
+      }
+    };
+    const handleClose = (closedLane: RelayLane) => {
+      if (closedLane === "alpha") alphaAlive = false;
+      else betaAlive = false;
+
       if (!alphaConn?.alive && !betaConn?.alive) {
         incoming.close(new Error("Cả hai kênh Relay đã đóng kết nối"));
+        return;
+      }
+
+      if (sessionKeys && !transferComplete && !controller.signal.aborted) {
+        const surviving = closedLane === "alpha" ? betaConn : alphaConn;
+        if (surviving?.alive) {
+          void encryptPayload(sessionKeys.aesKey, {
+            kind: "lane-down",
+            lane: closedLane,
+          })
+            .then((frame) => {
+              if (surviving.alive) surviving.sendJson(frame);
+            })
+            .catch(() => undefined);
+        }
       }
     };
 
-    alphaConn = await openRelayChannel({
-      baseWsUrl,
-      lane: "alpha",
+    const opened = await openEnhancedChannels({
       room,
       role: "receiver",
+      codephrase,
+      dualRelay,
+      relayProfile,
+      publicRelaySettings,
+      publicConnectRelay,
       targetRelayNode,
+      baseWsUrl,
       wsFactory,
       onMessage: handleMsg,
+      onPeerCount: handlePeerCount,
       onClose: handleClose,
-      signal,
+      signal: controller.signal,
     });
-    if (dualRelay) {
-      betaConn = await openRelayChannel({
-        baseWsUrl,
-        lane: "beta",
-        room,
-        role: "receiver",
-        targetRelayNode,
-        wsFactory,
-        onMessage: handleMsg,
-        onClose: handleClose,
-        signal,
+    alphaConn = opened.alphaConn;
+    betaConn = opened.betaConn;
+    let effectiveDualRelay = opened.effectiveDualRelay;
+    alphaAlive = Boolean(alphaConn.alive);
+    betaAlive = Boolean(betaConn?.alive);
+
+    if (dualRelay && !effectiveDualRelay && opened.betaFallbackReason && emitInspector) {
+      protocolEventBus.logEvent({
+        kind: "relay",
+        mode: "enhanced",
+        relay: "alpha",
+        title: "Không mở được Relay Beta — chuyển về 1 kênh Relay Alpha",
+        detail: opened.betaFallbackReason,
       });
     }
 
@@ -1013,12 +1516,10 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         kind: "relay",
         mode: "enhanced",
         relay: "alpha",
-        title: targetRelayNode
-          ? `Đã kết nối qua Relay Node (${targetRelayNode})`
-          : dualRelay
-            ? "Đã kết nối song song Relay Alpha & Beta"
-            : "Đã kết nối Relay Alpha",
-        detail: `Room ${room}`,
+        title: effectiveDualRelay
+          ? "Đã kết nối song song Relay Alpha & Beta"
+          : "Đã kết nối Relay Alpha",
+        detail: opened.routeDetail,
       });
       protocolEventBus.setPakeStep("pake", "active");
     }
@@ -1032,24 +1533,54 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     const myPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", myKeyPair.publicKey));
     const salt = crypto.getRandomValues(new Uint8Array(32));
 
-    const sendControlMsg = (msg: WirePlainMessage) => {
-      if (alphaConn?.alive) alphaConn.sendJson(msg);
-      else if (betaConn?.alive) betaConn.sendJson(msg);
-      else throw new Error("Không còn kênh Relay hoạt động");
+    const sendControlMsg = (msg: WirePlainMessage, preferredLane?: RelayLane) => {
+      if (preferredLane === "beta" && betaConn?.alive) {
+        betaConn.sendJson(msg);
+      } else if (preferredLane === "alpha" && alphaConn?.alive) {
+        alphaConn.sendJson(msg);
+      } else if (alphaConn?.alive) {
+        alphaConn.sendJson(msg);
+      } else if (betaConn?.alive) {
+        betaConn.sendJson(msg);
+      } else {
+        throw new Error("Không còn kênh Relay hoạt động");
+      }
     };
 
-    sendControlMsg({
+    const pakeInitMsg: WirePlainMessage = {
       type: "pake-init",
       pubKeyB64: bytesToBase64(myPubRaw),
       saltB64: bytesToBase64(salt),
-    });
+    };
+    sendPakeInitFn = () => {
+      if (gotPakeReply || controller.signal.aborted) return;
+      try {
+        sendControlMsg(pakeInitMsg);
+      } catch {
+        // Ignore if channel closed while retrying
+      }
+    };
+
+    sendPakeInitFn();
+    pakeRetryTimer = setInterval(() => {
+      sendPakeInitFn?.();
+    }, PAKE_INIT_RETRY_MS);
 
     let replyMsg: Extract<WirePlainMessage, { type: "pake-reply" }> | null = null;
-    while (!replyMsg) {
-      const next = await incoming.next();
-      if (next.msg.type === "pake-reply") {
-        replyMsg = next.msg;
+    try {
+      while (!replyMsg) {
+        const next = await incoming.next();
+        if (next.msg.type === "pake-reply") {
+          gotPakeReply = true;
+          replyMsg = next.msg;
+        }
       }
+    } finally {
+      if (pakeRetryTimer) {
+        clearInterval(pakeRetryTimer);
+        pakeRetryTimer = undefined;
+      }
+      sendPakeInitFn = null;
     }
 
     const peerPub = await crypto.subtle.importKey(
@@ -1078,6 +1609,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       room,
       salt,
     });
+    sessionKeys = keys;
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("hkdf", "done");
@@ -1100,16 +1632,27 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
 
     onStatus?.("Đang nhận Folder Manifest từ máy gửi…");
     let manifest: FolderManifest | null = null;
+    let senderDualRelay = effectiveDualRelay;
     while (!manifest) {
       const next = await incoming.next();
       if (next.msg.type === "encrypted") {
         const decMsg = await decryptPayload(keys.aesKey, next.msg);
         if (decMsg.kind === "manifest") {
           manifest = decMsg.manifest;
+          senderDualRelay = Boolean(decMsg.dualRelay);
         } else if (decMsg.kind === "error") {
           throw new Error(decMsg.message);
         }
       }
+    }
+
+    // Negotiate effective Dual-Relay mode; close idle Beta if single-channel is chosen
+    const negotiatedDual = senderDualRelay && effectiveDualRelay && Boolean(betaConn?.alive);
+    if (effectiveDualRelay && !negotiatedDual) {
+      effectiveDualRelay = false;
+      betaAlive = false;
+      betaConn?.close();
+      betaConn = null;
     }
 
     if (emitInspector) {
@@ -1156,6 +1699,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         missingIndices,
         skippedCount: resumePlan.skippedChunks.length,
         newFilePaths: resumePlan.newFilePaths,
+        dualRelayAccepted: negotiatedDual,
       }),
     );
 
@@ -1177,7 +1721,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     );
 
     while (chunkBuffers.size < manifest.totalChunks) {
-      if (signal?.aborted) {
+      if (controller.signal.aborted) {
         throw new DOMException("Đã hủy nhận dữ liệu", "AbortError");
       }
       const next = await incoming.next();
@@ -1190,7 +1734,19 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
 
       const desc = chunkLookup.get(payload.globalIndex);
       if (!desc) continue;
-      if (chunkBuffers.has(desc.globalIndex)) continue;
+
+      if (chunkBuffers.has(desc.globalIndex)) {
+        // Re-acknowledge duplicates so a sender whose earlier ACK dropped on failover unblocks
+        sendControlMsg(
+          await encryptPayload(keys.aesKey, {
+            kind: "chunk-ack",
+            globalIndex: desc.globalIndex,
+            lane: next.lane,
+          }),
+          next.lane,
+        );
+        continue;
+      }
 
       const bytes = base64ToBytes(payload.dataB64);
       const actualHash = await sha256Hex(bytes);
@@ -1216,6 +1772,16 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         sha256: desc.sha256,
         data: bytes,
       });
+
+      // Send verified receipt back to sender over surviving lane
+      sendControlMsg(
+        await encryptPayload(keys.aesKey, {
+          kind: "chunk-ack",
+          globalIndex: desc.globalIndex,
+          lane: next.lane,
+        }),
+        next.lane,
+      );
 
       if (emitInspector) {
         protocolEventBus.updateChunkState(
@@ -1252,6 +1818,7 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
         betaChunks: betaReceived,
         failoverChunks: failoverReceived,
         alphaAlive: Boolean(alphaConn?.alive),
+        betaAlive: Boolean(betaConn?.alive),
         fileProgress,
       });
 
@@ -1290,11 +1857,12 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
       });
     }
 
+    transferComplete = true;
     const completeFrame = await encryptPayload(keys.aesKey, {
       kind: "complete",
       totalVerified: manifest.totalChunks,
     });
-    // Broadcast completion on every live channel so Alpha failover never drops the final ACK
+    // Broadcast completion on every live channel so failover never drops the final ACK
     let sentComplete = false;
     if (alphaConn?.alive) {
       try {
@@ -1315,6 +1883,10 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     if (!sentComplete) {
       throw new Error("Không còn kênh Relay hoạt động để gửi xác nhận hoàn tất");
     }
+    await Promise.all([
+      alphaConn?.flush?.() ?? Promise.resolve(),
+      betaConn?.flush?.() ?? Promise.resolve(),
+    ]);
 
     if (emitInspector) {
       protocolEventBus.setPakeStep("stream", "done");
@@ -1339,6 +1911,11 @@ export async function receiveEnhancedTransfer(options: EnhancedReceiveParams): P
     }
     throw err;
   } finally {
+    if (pakeRetryTimer) {
+      clearInterval(pakeRetryTimer);
+      pakeRetryTimer = undefined;
+    }
+    signal?.removeEventListener("abort", handleAbort);
     alphaConn?.close();
     betaConn?.close();
   }

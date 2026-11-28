@@ -109,6 +109,27 @@ export class DualRelayScheduler {
   }
 
   /**
+   * Returns the count of chunks currently in-flight on the given lane.
+   */
+  inFlightCountForLane(lane: RelayLane): number {
+    let count = 0;
+    for (const item of this.items.values()) {
+      if (item.status === "in-flight" && item.activeLane === lane) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Returns the scheduled chunk descriptor for a given globalIndex if present.
+   */
+  getChunk(globalIndex: number): ScheduledChunk | undefined {
+    const item = this.items.get(globalIndex);
+    return item ? { ...item } : undefined;
+  }
+
+  /**
    * Records chunk delivery receipt upon SHA-256 verification.
    * Increments lane metrics and ensures idempotency (already delivered chunks are ignored).
    */
@@ -123,21 +144,40 @@ export class DualRelayScheduler {
   }
 
   /**
-   * Simulates or reacts to Relay Alpha disconnect. Every pending or in-flight
-   * even chunk assigned to Alpha is immediately rerouted to Relay Beta.
-   *
-   * @returns Array of chunk indices successfully reassigned to Beta
+   * Marks all remaining non-delivered chunks as delivered on their active lanes.
+   * Used when the peer's full-manifest `complete` confirmation arrives over a faster
+   * channel ahead of trailing per-chunk ACKs on the slower channel.
    */
-  triggerAlphaFailover(): number[] {
-    if (!this.alphaAlive) return [];
-    this.alphaAlive = false;
+  markRemainingDelivered(): ScheduledChunk[] {
+    const finalized: ScheduledChunk[] = [];
+    for (const item of this.items.values()) {
+      if (item.status !== "delivered") {
+        item.status = "delivered";
+        if (item.activeLane === "alpha") this.alphaDelivered += 1;
+        else this.betaDelivered += 1;
+        finalized.push({ ...item });
+      }
+    }
+    return finalized;
+  }
+
+  private triggerLaneFailover(failedLane: RelayLane): number[] {
+    if (failedLane === "alpha") {
+      if (!this.alphaAlive) return [];
+      this.alphaAlive = false;
+      if (!this.betaAlive) return [];
+    } else {
+      if (!this.betaAlive) return [];
+      this.betaAlive = false;
+      if (!this.alphaAlive) return [];
+    }
+
+    const survivingLane: RelayLane = failedLane === "alpha" ? "beta" : "alpha";
     const reroutedIndices: number[] = [];
 
-    if (!this.betaAlive) return reroutedIndices;
-
     for (const item of this.items.values()) {
-      if (item.status !== "delivered" && item.activeLane === "alpha") {
-        item.activeLane = "beta";
+      if (item.status !== "delivered" && item.activeLane === failedLane) {
+        item.activeLane = survivingLane;
         item.status = "rerouted";
         item.rerouted = true;
         this.failoverReroutedCount += 1;
@@ -145,6 +185,26 @@ export class DualRelayScheduler {
       }
     }
     return reroutedIndices;
+  }
+
+  /**
+   * Simulates or reacts to Relay Alpha disconnect. Every pending or in-flight
+   * even chunk assigned to Alpha is immediately rerouted to Relay Beta.
+   *
+   * @returns Array of chunk indices successfully reassigned to Beta
+   */
+  triggerAlphaFailover(): number[] {
+    return this.triggerLaneFailover("alpha");
+  }
+
+  /**
+   * Reacts to Relay Beta disconnect. Every pending or in-flight
+   * odd chunk assigned to Beta is immediately rerouted to Relay Alpha.
+   *
+   * @returns Array of chunk indices successfully reassigned to Alpha
+   */
+  triggerBetaFailover(): number[] {
+    return this.triggerLaneFailover("beta");
   }
 
   isComplete(): boolean {

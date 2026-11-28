@@ -37,10 +37,10 @@ export function StreamInspectorDrawer({
               <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">
                 {t.streamInspector.relayAlpha}
               </span>
-              {alphaRttMs !== undefined && (
+              {typeof alphaRttMs === "number" && (
                 <span className="inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-sans font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                   <Zap className="h-2 w-2" />
-                  {alphaRttMs !== null ? `${alphaRttMs}ms` : "<2ms"}
+                  {alphaRttMs}ms
                 </span>
               )}
             </div>
@@ -53,10 +53,10 @@ export function StreamInspectorDrawer({
               <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">
                 {t.streamInspector.relayBeta}
               </span>
-              {betaRttMs !== undefined && (
+              {typeof betaRttMs === "number" && (
                 <span className="inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-sans font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                   <Zap className="h-2 w-2" />
-                  {betaRttMs !== null ? `${betaRttMs}ms` : "<2ms"}
+                  {betaRttMs}ms
                 </span>
               )}
             </div>
@@ -69,7 +69,7 @@ export function StreamInspectorDrawer({
               <span className="text-[10px] uppercase tracking-wider text-zinc-400 block font-sans">
                 {t.streamInspector.failover}
               </span>
-              {!progress.alphaAlive && (
+              {(!progress.alphaAlive || progress.betaAlive === false) && (
                 <span className="inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-sans font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
                   <Activity className="h-2 w-2" />
                   {t.streamInspector.statusSevered}

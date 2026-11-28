@@ -7,6 +7,7 @@ import {
   getRelayProfileEndpoints,
   isLocalLabProfile,
   rankRelaysByLatency,
+  resolveStreamPairRtts,
   RELAY_PROFILE_KEY,
   type RelayNodeEntry,
   type StorageLike,
@@ -196,4 +197,36 @@ test("findFastestRelay identifies lowest latency relay by address, host, or inde
   assert.equal(findFastestRelay({}, addresses), null);
   assert.equal(findFastestRelay({ "1.getcroc.com": null }, addresses), null);
   assert.equal(findFastestRelay(latenciesAddr, []), null);
+});
+
+test("resolveStreamPairRtts returns real measured latencies without fabricated offsets", () => {
+  const addresses = [
+    "1.getcroc.com:9009",
+    "2.getcroc.com:9009",
+    "3.getcroc.com:9009",
+    "4.getcroc.com:9009",
+  ];
+  const publicRtts = resolveStreamPairRtts({
+    relayProfile: "public",
+    latencies: { "1.getcroc.com:9009": 42, "3.getcroc.com:9009": 95 },
+    relayAddresses: addresses,
+    alphaIndex: 0,
+    betaIndex: 2,
+  });
+  assert.deepEqual(publicRtts, { alphaRttMs: 42, betaRttMs: 95 });
+
+  const missingBeta = resolveStreamPairRtts({
+    relayProfile: "public",
+    latencies: { "1.getcroc.com": 33 },
+    relayAddresses: addresses,
+    alphaIndex: 0,
+    betaIndex: 1,
+  });
+  assert.deepEqual(missingBeta, { alphaRttMs: 33, betaRttMs: null });
+
+  const localRtts = resolveStreamPairRtts({
+    relayProfile: "local-lab",
+    latencies: { "local-alpha": 1.2, "local-beta": 1.5 },
+  });
+  assert.deepEqual(localRtts, { alphaRttMs: 1.2, betaRttMs: 1.5 });
 });

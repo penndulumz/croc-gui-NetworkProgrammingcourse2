@@ -25,6 +25,7 @@ import { DownloadDestination, TextDestination } from "../protocol/croc/storage";
 import type { FileProgress as CrocFileProgress, OfferedFile, TransferOffer } from "../protocol/croc/types";
 import {
   receiveEnhancedTransfer,
+  resolvePublicDualRelayPlan,
   type EnhancedProgress,
   type ReceivedEnhancedFile,
 } from "../protocol/enhanced/enhanced-client";
@@ -49,8 +50,9 @@ import {
 } from "../lib/metrics";
 import { downloadZipArchive, saveEntriesToDirectory, type ZipEntry } from "../lib/zip";
 import {
-  findFastestRelay,
+  isLocalLabProfile,
   loadRelayLatencies,
+  resolveStreamPairRtts,
   type RelayProfileMode,
 } from "../lib/relay-manager";
 import type { Locale } from "../lib/i18n";
@@ -331,6 +333,10 @@ export function ReceiveView({
 
   const [stdProgress, setStdProgress] = useState<CrocFileProgress | null>(null);
   const [enhProgress, setEnhProgress] = useState<EnhancedProgress | null>(null);
+  const [streamPairRtts, setStreamPairRtts] = useState<{
+    alphaRttMs: number | null;
+    betaRttMs: number | null;
+  }>({ alphaRttMs: null, betaRttMs: null });
   const [offeredFiles, setOfferedFiles] = useState<OfferedFile[] | null>(null);
   const metricsTrackerRef = useRef<RollingMetricsTracker | null>(null);
   const [metrics, setMetrics] = useRollingMetrics(metricsTrackerRef, busy);
@@ -349,13 +355,7 @@ export function ReceiveView({
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const isLocalProfile = relayProfile === "local-dual" || relayProfile === "local-lab";
-
-  const fastestProbedRelay = useMemo(() => {
-    const relayAddresses = bridgeConfig?.relayAddresses ?? [];
-    const latencies = loadRelayLatencies();
-    return findFastestRelay(latencies, relayAddresses);
-  }, [bridgeConfig]);
+  const isLocalProfile = isLocalLabProfile(relayProfile);
 
   useEffect(() => {
     if (prefillCode) {
@@ -499,15 +499,40 @@ export function ReceiveView({
     }
 
     // Enhanced Mode Receive
+    if (!isLocalProfile && (!bridgeConfig || bridgeConfig.relayAddresses.length === 0)) {
+      setErrorText("Bridge Server chưa sẵn sàng danh sách Relay công cộng.");
+      setBusy(false);
+      return;
+    }
     try {
       const wsDualUrl = bridgeWsURL("/ws-dual");
-      const targetedNode = fastestProbedRelay
-        ? `${fastestProbedRelay.host} (${fastestProbedRelay.rttMs} ms)`
-        : undefined;
+      const latencies = loadRelayLatencies();
+      if (!isLocalProfile && bridgeConfig?.relayAddresses.length) {
+        const plan = await resolvePublicDualRelayPlan(secret, bridgeConfig.relayAddresses);
+        setStreamPairRtts(
+          resolveStreamPairRtts({
+            relayProfile,
+            latencies,
+            relayAddresses: bridgeConfig.relayAddresses,
+            alphaIndex: plan.alphaIndex,
+            betaIndex: plan.betaIndex,
+          }),
+        );
+      } else {
+        setStreamPairRtts(resolveStreamPairRtts({ relayProfile, latencies }));
+      }
       const res = await receiveEnhancedTransfer({
         codephrase: secret,
         dualRelay,
-        targetRelayNode: targetedNode,
+        relayProfile,
+        publicRelaySettings:
+          !isLocalProfile && bridgeConfig
+            ? {
+                bridgeURL: bridgeWsURL("/ws"),
+                relayAddresses: bridgeConfig.relayAddresses,
+                relayPassword: bridgeConfig.relayPassword,
+              }
+            : undefined,
         baseWsUrl: wsDualUrl,
         signal: controller.signal,
         onStatus: setStatusText,
@@ -801,8 +826,8 @@ export function ReceiveView({
               <StreamInspectorDrawer
                 progress={enhProgress}
                 locale={locale}
-                alphaRttMs={isLocalProfile ? null : (fastestProbedRelay?.rttMs ?? null)}
-                betaRttMs={isLocalProfile ? null : (fastestProbedRelay?.rttMs ? fastestProbedRelay.rttMs + 4 : null)}
+                alphaRttMs={streamPairRtts.alphaRttMs}
+                betaRttMs={streamPairRtts.betaRttMs}
               />
             )}
 

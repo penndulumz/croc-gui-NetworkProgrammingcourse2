@@ -69,3 +69,41 @@ test("DualRelayScheduler reroutes remaining and in-flight even chunks to Beta on
   assert.equal(snap.betaDelivered, 5);
   assert.equal(snap.failoverReroutedCount, 2);
 });
+
+test("DualRelayScheduler reroutes remaining and in-flight odd chunks to Alpha on Beta failover and tracks in-flight counts", () => {
+  const scheduler = new DualRelayScheduler([0, 1, 2, 3, 4, 5], true);
+
+  const c0 = scheduler.nextForLane("alpha");
+  const c1 = scheduler.nextForLane("beta");
+  const c3 = scheduler.nextForLane("beta");
+  assert.equal(c0?.globalIndex, 0);
+  assert.equal(c1?.globalIndex, 1);
+  assert.equal(c3?.globalIndex, 3);
+  assert.equal(scheduler.inFlightCountForLane("alpha"), 1);
+  assert.equal(scheduler.inFlightCountForLane("beta"), 2);
+
+  scheduler.markDelivered(1, "beta");
+  assert.equal(scheduler.inFlightCountForLane("beta"), 1);
+
+  // Relay Beta drops! In-flight chunk 3 and pending chunk 5 must failover to Alpha
+  const rerouted = scheduler.triggerBetaFailover();
+  assert.deepEqual(rerouted, [3, 5]);
+  assert.equal(scheduler.nextForLane("beta"), null);
+  assert.equal(scheduler.inFlightCountForLane("beta"), 0);
+
+  const alphaRest: number[] = [];
+  for (;;) {
+    const next = scheduler.nextForLane("alpha");
+    if (!next) break;
+    alphaRest.push(next.globalIndex);
+    scheduler.markDelivered(next.globalIndex, "alpha");
+  }
+  scheduler.markDelivered(0, "alpha");
+
+  assert.deepEqual(alphaRest.sort((a, b) => a - b), [2, 3, 4, 5]);
+  assert.equal(scheduler.isComplete(), true);
+  const snap = scheduler.getSnapshot();
+  assert.equal(snap.betaAlive, false);
+  assert.equal(snap.alphaAlive, true);
+  assert.equal(snap.failoverReroutedCount, 2);
+});

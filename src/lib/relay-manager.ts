@@ -139,6 +139,38 @@ export function findFastestRelay(
   return fastest;
 }
 
+export function resolveStreamPairRtts(params: {
+  relayProfile: RelayProfileMode;
+  latencies: Record<string, number | null>;
+  relayAddresses?: string[];
+  alphaIndex?: number;
+  betaIndex?: number;
+}): { alphaRttMs: number | null; betaRttMs: number | null } {
+  const { relayProfile, latencies, relayAddresses = [], alphaIndex = 0, betaIndex = 1 } = params;
+  if (isLocalLabProfile(relayProfile)) {
+    const a = latencies["local-alpha"] ?? latencies["local://relay-alpha"] ?? null;
+    const b = latencies["local-beta"] ?? latencies["local://relay-beta"] ?? null;
+    return {
+      alphaRttMs: typeof a === "number" ? a : null,
+      betaRttMs: typeof b === "number" ? b : null,
+    };
+  }
+  const lookup = (idx: number): number | null => {
+    const addr = relayAddresses[idx];
+    const host = addr ? (addr.lastIndexOf(":") > 0 ? addr.slice(0, addr.lastIndexOf(":")) : addr) : undefined;
+    const v =
+      (addr ? latencies[addr] : undefined) ??
+      (host ? latencies[host] : undefined) ??
+      latencies[String(idx)] ??
+      latencies[`public-${idx}`];
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  };
+  return {
+    alphaRttMs: lookup(alphaIndex),
+    betaRttMs: lookup(betaIndex),
+  };
+}
+
 export function loadRelayProfile(storage?: StorageLike | null): RelayProfileMode {
   try {
     const targetStorage =
