@@ -7,13 +7,13 @@ const androidRoot = path.join(root, "android");
 const javaRoot = path.join(androidRoot, "app", "src", "main", "java");
 const wrapperPropertiesPath = path.join(androidRoot, "gradle", "wrapper", "gradle-wrapper.properties");
 const wrapperProperties = await readFile(wrapperPropertiesPath, "utf8");
+if (!/^distributionUrl=.*$/m.test(wrapperProperties)) {
+  throw new Error("Could not find distributionUrl in gradle-wrapper.properties");
+}
 const compatibleWrapperProperties = wrapperProperties.replace(
-  /distributionUrl=.*gradle-[\d.]+-bin\.zip/,
+  /^distributionUrl=.*$/m,
   "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip",
 );
-if (compatibleWrapperProperties === wrapperProperties && !wrapperProperties.includes("gradle-8.14.3-bin.zip")) {
-  throw new Error("Could not set the Android-compatible Gradle wrapper version");
-}
 if (compatibleWrapperProperties !== wrapperProperties) {
   await writeFile(wrapperPropertiesPath, compatibleWrapperProperties);
 }
