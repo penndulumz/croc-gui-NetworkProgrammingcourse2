@@ -4,9 +4,9 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Propagate `Relay Profile` and public `Relay Node` list into `Enhanced Mode` send and receive calls.
-- [ ] Route public `Dual-Relay Transfer` across deterministic distinct indices (`alphaIndex` and `(alphaIndex + 1) % relayCount`) via `Bridge Server` Croc socket framing, falling back to single lane if fewer than `2` relays exist.
-- [ ] Validate `Bridge Server` availability cleanly when using the public `Relay Profile` and enable optimized `Codephrase` generation for `Enhanced Mode` public transfers.
-- [ ] Cross-server E2E test verifies dual-lane transfer across public Croc `Relay Node` endpoints (`Alpha` and `Beta` chunks verified).
+- [x] Propagate `Relay Profile` and public `Relay Node` list into `Enhanced Mode` send and receive calls.
+- [x] Route public `Dual-Relay Transfer` across deterministic distinct indices (`alphaIndex` and `(alphaIndex + 1) % relayCount`) via `Bridge Server` Croc socket framing, falling back to single lane if fewer than `2` relays exist.
+- [x] Validate `Bridge Server` availability cleanly when using the public `Relay Profile` and enable optimized `Codephrase` generation for `Enhanced Mode` public transfers.
+- [x] Cross-server E2E test verifies dual-lane transfer across public Croc `Relay Node` endpoints (`Alpha` and `Beta` chunks verified).

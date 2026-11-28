@@ -4,10 +4,10 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Track `peer_count` readiness on `Relay Alpha` so Sender triggers idempotent `pake-init` whenever the peer joins.
-- [ ] Retry `pake-init` on a bounded `350ms` cadence until `pake-reply` is received.
-- [ ] Re-emit `pake-reply` idempotently on Receiver upon duplicate `pake-init` frames.
-- [ ] Wire abort signal handling cleanly into handshake waiting promises and cancel retry intervals on abort or completion.
-- [ ] Integration tests cover Receiver-first join order and mid-PAKE abort cancellation.
+- [x] Track `peer_count` readiness on `Relay Alpha` so Receiver triggers idempotent `pake-init` whenever the peer joins.
+- [x] Retry `pake-init` from Receiver on a bounded `350ms` cadence until `pake-reply` is received.
+- [x] Re-emit `pake-reply` idempotently on Sender upon duplicate `pake-init` frames.
+- [x] Wire abort signal handling cleanly into handshake waiting promises and cancel retry intervals on abort or completion.
+- [x] Integration tests cover Receiver-first join order and mid-PAKE abort cancellation.

@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Bound each active scheduler lane to an in-flight window (`MAX_IN_FLIGHT_PER_LANE = 4`) with event-driven worker wakeup.
-- [ ] Extract a shared symmetric lane-failover transition handling both `Relay Alpha` and `Relay Beta` drops without losing chunks.
-- [ ] Track per-lane in-flight counts and support `markRemainingDelivered` reconciliation if `complete` arrives ahead of trailing slower-lane ACKs.
-- [ ] Flush buffered socket data explicitly before closing transport channels and emit `lane-down` from Receiver on premature lane closure.
-- [ ] Unit and loopback fault-injection tests verify pipelined transfers, `Relay Alpha` failover, `Relay Beta` failover, and 100% SHA-256 integrity.
+- [x] Bound each active scheduler lane to an in-flight window (`MAX_IN_FLIGHT_PER_LANE = 4`) with event-driven worker wakeup.
+- [x] Extract a shared symmetric lane-failover transition handling both `Relay Alpha` and `Relay Beta` drops without losing chunks.
+- [x] Track per-lane in-flight counts and support `markRemainingDelivered` reconciliation if `complete` arrives ahead of trailing slower-lane ACKs.
+- [x] Flush buffered socket data explicitly before closing transport channels and emit `lane-down` from Receiver on premature lane closure.
+- [x] Unit and loopback fault-injection tests verify pipelined transfers, `Relay Alpha` failover, `Relay Beta` failover, and 100% SHA-256 integrity.

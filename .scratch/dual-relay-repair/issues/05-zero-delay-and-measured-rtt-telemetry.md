@@ -4,9 +4,9 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Configure browser transfers with `chunkDelayMs = 0` so multi-megabyte transfers complete rapidly even in background tabs.
-- [ ] Resolve `Relay Alpha` and `Relay Beta` latency solely from measured `Relay Node` ping RTTs without synthetic offsets or hardcoded `"<2ms"` strings.
-- [ ] Pass real stream-pair RTTs into transfer telemetry and display explicit unavailable vs. severed `Relay Beta` indicators in `Protocol Inspector`.
-- [ ] Unit and browser E2E tests verify genuine RTT resolution (`null` preservation) and fast multi-megabyte `4 MB` transfer with live `Failover`.
+- [x] Configure browser transfers with `chunkDelayMs = 0` so multi-megabyte transfers complete rapidly even in background tabs.
+- [x] Resolve `Relay Alpha` and `Relay Beta` latency solely from measured `Relay Node` ping RTTs without synthetic offsets or hardcoded `"<2ms"` strings.
+- [x] Pass real stream-pair RTTs into transfer telemetry and display explicit unavailable vs. severed `Relay Beta` indicators in `Protocol Inspector`.
+- [x] Unit and browser E2E tests verify genuine RTT resolution (`null` preservation) and fast multi-megabyte `4 MB` transfer with live `Failover`.

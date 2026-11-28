@@ -4,9 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Compute `dualRelayAccepted` from both peers' `Dual-Relay Transfer` preference and availability of a second distinct `Relay Node`.
-- [ ] Exchange `dualRelayAccepted` in `resume-plan` before initiating any `Relay Beta` stream or scheduler lane.
-- [ ] Keep Receiver-first and Sender-first `Transfer Session` runs passing end-to-end when `Dual-Relay Transfer` is enabled on only one peer.
-- [ ] Integration and browser E2E tests verify ON/OFF and OFF/ON downgrade cleanly to `Relay Alpha` with SHA-256 verification.
+- [x] Compute `dualRelayAccepted` from both peers' `Dual-Relay Transfer` preference and availability of a second distinct `Relay Node`.
+- [x] Exchange `dualRelayAccepted` in `resume-plan` before initiating any `Relay Beta` stream or scheduler lane.
+- [x] Keep Receiver-first and Sender-first `Transfer Session` runs passing end-to-end when `Dual-Relay Transfer` is enabled on only one peer.
+- [x] Integration and browser E2E tests verify ON/OFF and OFF/ON downgrade cleanly to `Relay Alpha` with SHA-256 verification.
